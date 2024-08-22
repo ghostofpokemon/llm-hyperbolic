@@ -32,29 +32,39 @@ class HyperbolicCompletion(Completion):
             "model": self.model_name,
             "prompt": str(prompt),
             "stream": stream,
-            **kwargs
         }
+        # Remove any None values from kwargs before updating data
+        data.update({k: v for k, v in kwargs.items() if v is not None})
 
-        with httpx.Client() as client:
-            response = client.post(url, headers=headers, json=data)
-            response.raise_for_status()
+        try:
+            with httpx.Client() as client:
+                response = client.post(url, headers=headers, json=data)
+                response.raise_for_status()
 
-            if stream:
-                for line in response.iter_lines():
-                    if line:
-                        try:
-                            chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                            if chunk.get('choices'):
-                                for choice in chunk['choices']:
-                                    yield choice['text']
-                        except (json.JSONDecodeError, IndexError):
-                            continue
-            else:
-                response_data = response.json()
-                if not response_data.get("choices"):
-                    raise ValueError("No response from Hyperbolic API")
-                for choice in response_data["choices"]:
-                    yield choice['text']
+                if stream:
+                    for line in response.iter_lines():
+                        if line:
+                            try:
+                                chunk = json.loads(line.decode('utf-8').split('data: ')[1])
+                                if chunk.get('choices'):
+                                    for choice in chunk['choices']:
+                                        yield choice['text']
+                            except (json.JSONDecodeError, IndexError):
+                                continue
+                else:
+                    response_data = response.json()
+                    if not response_data.get("choices"):
+                        raise ValueError("No response from Hyperbolic API")
+                    for choice in response_data["choices"]:
+                        yield choice['text']
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"Hyperbolic API returned an error: {e.response.text}") from e
+        except httpx.RequestError as e:
+            raise ValueError(f"Error communicating with Hyperbolic API: {e}") from e
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Error decoding JSON response from Hyperbolic API: {e}") from e
+        except Exception as e:
+            raise ValueError(f"Unexpected error occurred: {e}") from e
 
 @llm.hookimpl
 def register_models(register):
