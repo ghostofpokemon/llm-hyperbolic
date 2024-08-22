@@ -35,26 +35,26 @@ class HyperbolicCompletion(Completion):
             **kwargs
         }
 
-        response = httpx.post(url, headers=headers, json=data, stream=stream)
-        response.raise_for_status()
+        with httpx.Client() as client:
+            response = client.post(url, headers=headers, json=data)
+            response.raise_for_status()
 
-        chunks = []
-        if stream:
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                        if chunk.get('choices'):
-                            for choice in chunk['choices']:
-                                yield choice['text']
-                    except (json.JSONDecodeError, IndexError):
-                        continue
-        else:
-            response_data = response.json()
-            if not response_data.get("choices"):
-                raise ValueError("No response from Hyperbolic API")
-            for choice in response_data["choices"]:
-                yield choice['text']
+            if stream:
+                for line in response.iter_lines():
+                    if line:
+                        try:
+                            chunk = json.loads(line.decode('utf-8').split('data: ')[1])
+                            if chunk.get('choices'):
+                                for choice in chunk['choices']:
+                                    yield choice['text']
+                        except (json.JSONDecodeError, IndexError):
+                            continue
+            else:
+                response_data = response.json()
+                if not response_data.get("choices"):
+                    raise ValueError("No response from Hyperbolic API")
+                for choice in response_data["choices"]:
+                    yield choice['text']
 
 @llm.hookimpl
 def register_models(register):
