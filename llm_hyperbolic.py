@@ -30,23 +30,32 @@ class HyperbolicCompletion(Completion):
         data = {
             "model": self.model_name,
             "prompt": str(prompt),
+            "stream": stream,
             **kwargs
         }
 
         response = httpx.post(url, headers=headers, json=data)
         response.raise_for_status()
 
+        chunks = []
         if stream:
-            chunks = []
-            response_json = response.json()  # Ensure the response is parsed as JSON
-            for prefix, event, value in ijson.items(response_json, "choices.item"):
-                chunks.append(value)
-                chunks.append(value)
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line.decode('utf-8').split('data: ')[1])
+                        if chunk.get('choices'):
+                            chunks.extend(chunk['choices'])
+                    except (json.JSONDecodeError, IndexError):
+                        continue
         else:
             response_data = response.json()
             if not response_data.get("choices"):
                 raise ValueError("No response from Hyperbolic API")
             chunks = response_data["choices"]
+
+        if not chunks:
+            raise ValueError("No valid chunks received from Hyperbolic API")
+
         return chunks
 
 @llm.hookimpl
