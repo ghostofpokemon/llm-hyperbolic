@@ -2,6 +2,7 @@ import llm
 from llm.default_plugins.openai_models import Chat, Completion
 import httpx
 import ijson
+import json
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
