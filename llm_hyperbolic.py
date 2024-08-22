@@ -16,6 +16,32 @@ class HyperbolicCompletion(Completion):
     def __str__(self):
         return f"Hyperbolic Completion: {self.model_id}"
 
+    def execute(self, prompt, stream=False, **kwargs):
+        key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
+        if not key:
+            raise ValueError("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
+
+        url = f"{self.api_base}/completions"
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": self.model_name,
+            "prompt": prompt,
+            **kwargs
+        }
+
+        response = httpx.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        response_data = response.json()
+
+        if not response_data.get("choices"):
+            raise ValueError("No response from Hyperbolic API")
+
+        chunks = response_data["choices"]
+        return chunks
+
 @llm.hookimpl
 def register_models(register):
     register(
