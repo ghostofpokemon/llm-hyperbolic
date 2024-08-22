@@ -49,8 +49,8 @@ class HyperbolicCompletion(Completion):
                                 if chunk.get('choices'):
                                     for choice in chunk['choices']:
                                         yield choice['text']
-                            except (json.JSONDecodeError, IndexError):
-                                continue
+                            except (json.JSONDecodeError, IndexError) as e:
+                                raise ValueError(f"Error parsing streamed response: {e}") from e
                 else:
                     response_data = response.json()
                     if not response_data.get("choices"):
@@ -58,7 +58,14 @@ class HyperbolicCompletion(Completion):
                     for choice in response_data["choices"]:
                         yield choice['text']
         except httpx.HTTPStatusError as e:
-            raise ValueError(f"Hyperbolic API returned an error: {e.response.text}") from e
+            error_detail = e.response.text
+            try:
+                error_json = e.response.json()
+                if 'error' in error_json:
+                    error_detail = error_json['error'].get('message', error_detail)
+            except json.JSONDecodeError:
+                pass
+            raise ValueError(f"Hyperbolic API returned an error: {error_detail}") from e
         except httpx.RequestError as e:
             raise ValueError(f"Error communicating with Hyperbolic API: {e}") from e
         except json.JSONDecodeError as e:
