@@ -38,7 +38,7 @@ class HyperbolicCompletion(Completion):
 
         if stream:
             chunks = []
-            for prefix, event, value in ijson.items(response.json(), "choices.item"):
+            for prefix, event, value in ijson.items(response.text, "choices.item"):
                 chunks.append(value)
         else:
             response_data = response.json()
