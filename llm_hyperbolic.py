@@ -1,6 +1,7 @@
 import llm
 from llm.default_plugins.openai_models import Chat, Completion
 import httpx
+import ijson
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
@@ -34,12 +35,16 @@ class HyperbolicCompletion(Completion):
 
         response = httpx.post(url, headers=headers, json=data)
         response.raise_for_status()
-        response_data = response.json()
 
-        if not response_data.get("choices"):
-            raise ValueError("No response from Hyperbolic API")
-
-        chunks = response_data["choices"]
+        if stream:
+            chunks = []
+            for prefix, event, value in ijson.items(response.text, "choices.item"):
+                chunks.append(value)
+        else:
+            response_data = response.json()
+            if not response_data.get("choices"):
+                raise ValueError("No response from Hyperbolic API")
+            chunks = response_data["choices"]
         return chunks
 
 @llm.hookimpl
