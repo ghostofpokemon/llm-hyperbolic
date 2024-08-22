@@ -29,7 +29,7 @@ class HyperbolicCompletion(Completion):
         }
         data = {
             "model": self.model_name,
-            "prompt": prompt,
+            "prompt": str(prompt),
             **kwargs
         }
 
