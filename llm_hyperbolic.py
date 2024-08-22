@@ -40,6 +40,7 @@ class HyperbolicCompletion(Completion):
             chunks = []
             for prefix, event, value in ijson.items(response.text, "choices.item"):
                 chunks.append(value)
+                chunks.append(value)
         else:
             response_data = response.json()
             if not response_data.get("choices"):
