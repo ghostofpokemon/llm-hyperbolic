@@ -14,7 +14,6 @@ def get_model_ids_with_aliases():
         ("01-ai/Yi-1.5-34B-Chat", ["hyper-yi"], "chat"),
     ]
 
-    # FLUX.1-dev && StableDiffusion && Monad && 01-ai/Yi-1.5-34B-Chat && TTS &&
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"

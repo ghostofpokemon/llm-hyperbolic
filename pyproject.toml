@@ -1,10 +1,6 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "llm-hyperbolic"
-version = "0.1"
+version = "0.3"
 description = "LLM access to Hyperbolic's API"
 readme = "README.md"
 license = { file = "LICENSE" }
