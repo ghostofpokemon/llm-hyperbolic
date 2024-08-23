@@ -1,149 +1,127 @@
 import llm
 from llm.default_plugins.openai_models import Chat, Completion
-import httpx
-import ijson
-import json
 
+def get_model_ids_with_aliases():
+    return [
+        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base"], "completion"),
+        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
+        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat"),
+        ("NousResearch/Hermes-3-Llama-3.1-70B-FP8", ["hyper-hermes-70-fp8"], "chat"),
+        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
+        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
+        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
+        # ("01-ai/Yi-34B-Chat", ["hyper-yi-1"], "chat"),
+        ("01-ai/Yi-1.5-34B-Chat", ["hyper-yi"], "chat"),
+    ]
+
+    # FLUX.1-dev && StableDiffusion && Monad && 01-ai/Yi-1.5-34B-Chat && TTS &&
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
+    model_type = "chat"
+
+    def __init__(self, model_id, **kwargs):
+        super().__init__(model_id, **kwargs)
+        self.api_base = "https://api.hyperbolic.xyz/v1/"
 
     def __str__(self):
-        return f"Hyperbolic Chat: {self.model_id}"
+        return f"HyperbolicChat: {self.model_id}"
 
-    def execute(self, messages, stream=False, **kwargs):
-        key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
-        if not key:
-            raise ValueError("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
+    def execute(self, prompt, stream, response, conversation=None):
+        messages = []
+        current_system = None
+        if conversation is not None:
+            for prev_response in conversation.responses:
+                if prev_response.prompt.system and prev_response.prompt.system != current_system:
+                    messages.append({"role": "system", "content": prev_response.prompt.system})
+                    current_system = prev_response.prompt.system
+                messages.append({"role": "user", "content": prev_response.prompt.prompt})
+                messages.append({"role": "assistant", "content": prev_response.text()})
+        if prompt.system and prompt.system != current_system:
+            messages.append({"role": "system", "content": prompt.system})
+        messages.append({"role": "user", "content": prompt.prompt})
+        response._prompt_json = {"messages": messages}
+        kwargs = self.build_kwargs(prompt)
+        client = self.get_client()
 
-        url = f"{self.api_base}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": self.model_name,
-            "messages": messages,
-            "stream": stream,
-        }
-        data.update({k: v for k, v in kwargs.items() if v is not None})
+        completion = client.chat.completions.create(
+            model=self.model_name or self.model_id,
+            messages=messages,
+            stream=stream,
+            **kwargs,
+        )
 
-        try:
-            with httpx.Client() as client:
-                response = client.post(url, headers=headers, json=data)
-                response.raise_for_status()
+        for chunk in completion:
+            content = chunk.choices[0].delta.content
+            if content is not None:
+                yield content
 
-                if stream:
-                    for line in response.iter_lines():
-                        if line:
-                            try:
-                                chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                                if chunk.get('choices'):
-                                    for choice in chunk['choices']:
-                                        yield choice['message']['content']
-                            except (json.JSONDecodeError, IndexError) as e:
-                                raise ValueError(f"Error parsing streamed response: {e}") from e
-                else:
-                    response_data = response.json()
-                    if not response_data.get("choices"):
-                        raise ValueError("No response from Hyperbolic API")
-                    yield response_data["choices"][0]["message"]["content"]
-        except httpx.HTTPStatusError as e:
-            error_detail = e.response.text
-            try:
-                error_json = e.response.json()
-                if 'error' in error_json:
-                    error_detail = error_json['error'].get('message', error_detail)
-            except json.JSONDecodeError:
-                pass
-            raise ValueError(f"Hyperbolic API returned an error: {error_detail}") from e
-        except httpx.RequestError as e:
-            raise ValueError(f"Error communicating with Hyperbolic API: {e}") from e
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error decoding JSON response from Hyperbolic API: {e}") from e
-        except Exception as e:
-            raise ValueError(f"Unexpected error occurred: {e}") from e
+        response.response_json = {"content": "".join(response._chunks)}
 
 class HyperbolicCompletion(Completion):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
+    model_type = "completion"
+
+    def __init__(self, model_id, **kwargs):
+        super().__init__(model_id, **kwargs)
+        self.api_base = "https://api.hyperbolic.xyz/v1/"
 
     def __str__(self):
-        return f"Hyperbolic Completion: {self.model_id}"
+        return f"HyperbolicCompletion: {self.model_id}"
 
-    def execute(self, prompt, stream=False, **kwargs):
-        key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
-        if not key:
-            raise ValueError("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
+    def execute(self, prompt, stream, response, conversation=None):
+        messages = []
+        if conversation is not None:
+            for prev_response in conversation.responses:
+                messages.append(prev_response.prompt.prompt)
+                messages.append(prev_response.text())
+        messages.append(prompt.prompt)
+        response._prompt_json = {"prompt": "\n".join(messages)}
+        kwargs = self.build_kwargs(prompt)
+        client = self.get_client()
 
-        url = f"{self.api_base}/completions"
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": self.model_name,
-            "prompt": str(prompt),
-            "stream": stream,
-        }
-        # Remove any None values from kwargs before updating data
-        data.update({k: v for k, v in kwargs.items() if v is not None})
+        completion = client.completions.create(
+            model=self.model_name or self.model_id,
+            prompt="\n".join(messages),
+            stream=True,  # Always stream for this model
+            **kwargs,
+        )
 
-        try:
-            with httpx.Client() as client:
-                response = client.post(url, headers=headers, json=data)
-                response.raise_for_status()
+        for chunk in completion:
+            text = chunk.choices[0].text
+            if text:
+                yield text
 
-                if stream:
-                    for line in response.iter_lines():
-                        if line:
-                            try:
-                                chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                                if chunk.get('choices'):
-                                    for choice in chunk['choices']:
-                                        yield choice['text']
-                            except (json.JSONDecodeError, IndexError) as e:
-                                raise ValueError(f"Error parsing streamed response: {e}") from e
-                else:
-                    response_data = response.json()
-                    if not response_data.get("choices"):
-                        raise ValueError("No response from Hyperbolic API")
-                    for choice in response_data["choices"]:
-                        yield choice['text']
-        except httpx.HTTPStatusError as e:
-            error_detail = e.response.text
-            try:
-                error_json = e.response.json()
-                if 'error' in error_json:
-                    error_detail = error_json['error'].get('message', error_detail)
-            except json.JSONDecodeError:
-                pass
-            raise ValueError(f"Hyperbolic API returned an error: {error_detail}") from e
-        except httpx.RequestError as e:
-            raise ValueError(f"Error communicating with Hyperbolic API: {e}") from e
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error decoding JSON response from Hyperbolic API: {e}") from e
-        except Exception as e:
-            raise ValueError(f"Unexpected error occurred: {e}") from e
+        response.response_json = {"content": "".join(response._chunks)}
+
+# Dictionary to store registered models
+REGISTERED_MODELS = {}
+
+def register_model(cls):
+    REGISTERED_MODELS[cls.model_type] = cls
+    return cls
+
+# Decorate the classes to register them
+HyperbolicChat = register_model(HyperbolicChat)
+HyperbolicCompletion = register_model(HyperbolicCompletion)
 
 @llm.hookimpl
 def register_models(register):
-    register(
-        HyperbolicChat(
-            model_id="hyperbolicchat/meta-llama/Meta-Llama-3.1-405B-Instruct",
-            model_name="meta-llama/Meta-Llama-3.1-405B-Instruct",
-            api_base="https://api.hyperbolic.xyz/v1",
-        ),
-        aliases=["hyperbolic-instruct-chat"]
-    )
-    register(
-        HyperbolicCompletion(
-            model_id="hyperboliccompletion/meta-llama/Meta-Llama-3.1-405B-FP8",
-            model_name="meta-llama/Meta-Llama-3.1-405B-FP8",
-            api_base="https://api.hyperbolic.xyz/v1",
-        ),
-        aliases=["hyperbolic-fp8-completion"]
-    )
+    key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
+    if not key:
+        return
+    models_with_aliases = get_model_ids_with_aliases()
+    for model_id, aliases, model_type in models_with_aliases:
+        model_class = REGISTERED_MODELS.get(model_type)
+        if model_class:
+            register(
+                model_class(
+                    model_id=model_id,
+                    model_name=model_id,
+                ),
+                aliases=aliases
+            )
 
 @llm.hookimpl
 def register_commands(cli):
@@ -154,16 +132,11 @@ def register_commands(cli):
         if not key:
             print("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
             return
-
-        models = [
-            ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyperbolic-instruct-chat"]),
-            ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyperbolic-fp8-completion"])
-        ]
-
-        for model_id, aliases in models:
-            if "Instruct" in model_id:
-                print(f"Hyperbolic Chat: hyperbolicchat/{model_id}")
-            else:
-                print(f"Hyperbolic Completion: hyperboliccompletion/{model_id}")
-            print(f"  Aliases: {', '.join(aliases)}")
+        models_with_aliases = get_model_ids_with_aliases()
+        for model_id, aliases, model_type in models_with_aliases:
+            model_class = REGISTERED_MODELS.get(model_type)
+            if model_class:
+                print(f"{model_class.__name__}: {model_id}")
+            if aliases:
+                print(f"  Aliases: {', '.join(aliases)}")
             print()

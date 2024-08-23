@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-hyperbolic"
+version = "0.1"
+description = "LLM access to Hyperbolic's API"
+readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+requires-python = ">=3.8"
+dependencies = ["llm", "httpx"]
+authors = [{ name = "Nick Mystic" }]
+
+[project.urls]
+Homepage = "https://github.com/ghostofpokemon/llm-hyperbolic"
+Changelog = "https://github.com/ghostofpokemon/llm-hyperbolic/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ghostofpokemon/llm-hyperbolic/issues"
+CI = "https://github.com/ghostofpokemon/llm-hyperbolic/actions"
+
+[project.entry-points.llm]
+hyperbolic = "llm_hyperbolic"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-httpx"]
