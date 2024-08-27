@@ -3,7 +3,8 @@ from llm.default_plugins.openai_models import Chat, Completion
 
 def get_model_ids_with_aliases():
     return [
-        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base"], "completion"),
+        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "completion"),
+        ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
         ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat"),
         ("NousResearch/Hermes-3-Llama-3.1-70B-FP8", ["hyper-hermes-70-fp8"], "chat"),

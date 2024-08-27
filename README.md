@@ -1,6 +1,6 @@
 # llm-hyperbolic
 
-[![PyPI](https://img.shields.io/pypi/v/llm-hyperbolic.svg)](https://pypi.org/project/llm-hyperbolic/0.1/)
+[![PyPI](https://img.shields.io/pypi/v/llm-hyperbolic.svg)](https://pypi.org/project/llm-hyperbolic/0.4/)
 [![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/ghostofpokemon/llm-hyperbolic?include_prereleases)](https://github.com/ghostofpokemon/llm-hyperbolic/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/ghostofpokemon/llm-hyperbolic/blob/main/LICENSE)
 
@@ -34,7 +34,9 @@ llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commu
 
 llm -m hyper-llama-70 "Enlightenment in an alien-physics universe?"
 
-llm -m hyper-base "Transcending physicality, merging with the cosmic overmind"
+llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 0.7
+
+llm -m hyper-base-fp8 "Once upon a time, in a galaxy far, far away..."
 ```
 
 ## Development
