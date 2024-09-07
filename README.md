@@ -27,9 +27,10 @@ llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commu
 llm -m hyper-llama-70 "Enlightenment in an alien-physics universe?"
 llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 0.7
 llm -m hyper-base-fp8 "Once upon a time, in a galaxy far, far away..."
-llm -m hyper-reflect "How many Rs in strawberry?"
-llm -m hyper-reflect-rec "Why do cats always land on their feet?"
-llm -m hyper-reflect-rec-tc "What would happen if you mixed a banana with a pineapple?"
+llm -m hyper-reflect "Why do cats always land on their feet?"
+llm -m hyper-reflect-rec "What would happen if you mixed a banana with a pineapple?"
+llm -m hyper-reflect-rec-tc "How many Rs in strawberry?"
+
 ```
 
 ## Reflection Models
