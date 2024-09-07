@@ -1,6 +1,6 @@
 [project]
 name = "llm-hyperbolic"
-version = "0.4"
+version = "0.4.1"
 description = "LLM access to Hyperbolic's API"
 readme = "README.md"
 license = { file = "LICENSE" }
