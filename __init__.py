@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 # Version information
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Docstrings
 def get_model_ids_with_aliases():
