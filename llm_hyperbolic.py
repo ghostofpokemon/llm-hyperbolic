@@ -33,7 +33,7 @@ class HyperbolicChat(Chat):
         self.top_p = None
         self.aliases = aliases
 
-        if model_id == "mattshumer/Reflection-Llama-3.1-70B" and "hyper-reflect-rec" in self.aliases:
+        if any(alias.endswith("-rec") or alias.endswith("-rec-tc") for alias in self.aliases):
             self.system_prompt = "You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags."
             self.temperature = 0.7
             self.top_p = 0.95
