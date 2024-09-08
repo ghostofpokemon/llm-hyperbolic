@@ -18,22 +18,21 @@ def get_model_ids_with_aliases():
         ("01-ai/Yi-1.5-34B-Chat", ["hyper-yi"], "chat"),
     ]
 
+
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     model_type = "chat"
 
     def __init__(self, model_id, **kwargs):
-        # Safely retrieve optional parameters
         aliases = kwargs.pop('aliases', [])
-        super().__init__(model_id, **kwargs)  # Pass remaining kwargs to Chat.__init__
+        super().__init__(model_id, **kwargs)
         self.api_base = "https://api.hyperbolic.xyz/v1/"
         self.system_prompt = None
         self.temperature = None
         self.top_p = None
-        self.aliases = aliases  # Store aliases here
+        self.aliases = aliases
 
-        # Set recommended settings for the new model
         if model_id == "mattshumer/Reflection-Llama-3.1-70B" and "hyper-reflect-rec" in self.aliases:
             self.system_prompt = "You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags."
             self.temperature = 0.7
@@ -53,7 +52,6 @@ class HyperbolicChat(Chat):
                 messages.append({"role": "user", "content": prev_response.prompt.prompt})
                 messages.append({"role": "assistant", "content": prev_response.text()})
 
-        # Check if a system prompt is provided by the user
         if prompt.system and prompt.system != current_system:
             messages.append({"role": "system", "content": prompt.system})
             current_system = prompt.system
@@ -61,25 +59,22 @@ class HyperbolicChat(Chat):
             messages.append({"role": "system", "content": self.system_prompt})
             current_system = self.system_prompt
 
-        # Append "Think carefully." to the end of user messages for the hyper-reflect-rec-tc model
         user_message = prompt.prompt
         if "hyper-reflect-rec-tc" in self.aliases:
             user_message += " Think carefully."
 
         messages.append({"role": "user", "content": user_message})
 
-        # Add the prefill content for every message in the conversation if it's a reflection model
-        if "hyper-reflect" in self.aliases:
+        # Add the prefill content for reflection models
+        if any(alias.startswith("hyper-reflect") for alias in self.aliases):
             messages.append({"role": "assistant", "content": "<thinking>\n"})
 
         response._prompt_json = {"messages": messages}
         kwargs = self.build_kwargs(prompt)
 
-        # Use user-provided temperature and top_p if available, otherwise use defaults
         temperature = prompt.temperature if hasattr(prompt, 'temperature') else self.temperature
         top_p = prompt.top_p if hasattr(prompt, 'top_p') else self.top_p
 
-        # Only add temperature and top_p if they are not None
         if temperature is not None:
             kwargs["temperature"] = temperature
         if top_p is not None:
