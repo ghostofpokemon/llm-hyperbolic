@@ -1,3 +1,5 @@
+import time
+import httpx
 import llm
 from llm.default_plugins.openai_models import Chat, Completion
 
@@ -17,7 +19,6 @@ def get_model_ids_with_aliases():
         # ("01-ai/Yi-34B-Chat", ["hyper-yi-1"], "chat"),
         ("01-ai/Yi-1.5-34B-Chat", ["hyper-yi"], "chat"),
     ]
-
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
@@ -128,19 +129,34 @@ class HyperbolicCompletion(Completion):
         kwargs = self.build_kwargs(prompt)
         client = self.get_client()
 
-        completion = client.completions.create(
-            model=self.model_name or self.model_id,
-            prompt=full_prompt,
-            stream=True,  # Always stream for this model
-            **kwargs,
-        )
+        retries = 3
+        delay = 5  # seconds
 
-        for chunk in completion:
-            text = chunk.choices[0].text
-            if text:
-                yield text
+        for attempt in range(retries):
+            try:
+                completion = client.completions.create(
+                    model=self.model_name or self.model_id,
+                    prompt=full_prompt,
+                    stream=True,  # Always stream for this model
+                    **kwargs,
+                )
 
-        response.response_json = {"content": "".join(response._chunks)}
+                for chunk in completion:
+                    text = chunk.choices[0].text
+                    if text:
+                        yield text
+
+                response.response_json = {"content": "".join(response._chunks)}
+                break  # Exit the retry loop if successful
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    print(f"Authentication error (401). Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    raise  # Re-raise the exception if it's not a 401 error
+            except Exception as e:
+                print(f"An error occurred: {str(e)}")
+                raise
 
 # Dictionary to store registered models
 REGISTERED_MODELS = {}
