@@ -1,0 +1,6 @@
+llm
+httpx
+
+[test]
+pytest
+pytest-httpx

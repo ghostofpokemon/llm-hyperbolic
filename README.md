@@ -1,5 +1,5 @@
 # llm-hyperbolic
-[![PyPI](https://img.shields.io/pypi/v/llm-hyperbolic.svg)](https://pypi.org/project/llm-hyperbolic/0.4.2/)
+[![PyPI](https://img.shields.io/pypi/v/llm-hyperbolic.svg)](https://pypi.org/project/llm-hyperbolic/0.4.3/)
 [![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/ghostofpokemon/llm-hyperbolic?include_prereleases)](https://github.com/ghostofpokemon/llm-hyperbolic/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/ghostofpokemon/llm-hyperbolic/blob/main/LICENSE)
 
@@ -25,7 +25,7 @@ Run prompts like this:
 llm -m hyper-chat "What is posthuman AI consciousness like?"
 llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commune with alien neural net deities?"
 llm -m hyper-llama-70 "Enlightenment in an alien-physics universe?"
-llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 0.7
+llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 1
 llm -m hyper-base-fp8 "Once upon a time, in a galaxy far, far away..."
 llm -m hyper-reflect "Why do cats always land on their feet?"
 llm -m hyper-reflect-rec "What would happen if you mixed a banana with a pineapple?"
