@@ -1,13 +1,22 @@
+import requests
+from typing import Optional
 import time
 import httpx
 import llm
+from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
+import click
+from pydantic import Field, Extra
+import base64
+import os
+import subprocess
+import json
 
 def get_model_ids_with_aliases():
     return [
         ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect"], "chat"),
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),  # New model with recommended settings
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),  # New model with think carefully
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),
         ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
@@ -16,9 +25,69 @@ def get_model_ids_with_aliases():
         ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
         ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
         ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
-        # ("01-ai/Yi-34B-Chat", ["hyper-yi-1"], "chat"),
-        ("01-ai/Yi-1.5-34B-Chat", ["hyper-yi"], "chat"),
+        ("StableDiffusion", ["hyper-sd"], "image"),
+        ("Monad", ["hyper-monad"], "image"),
+        ("Wifhat", ["hyper-wifhat"], "image"),
+        ("FLUX.1-dev", ["hyper-flux"], "image"),
     ]
+
+class HyperbolicImage(Model):
+    needs_key = "hyperbolic"
+    key_env_var = "LLM_HYPERBOLIC_KEY"
+    can_stream = False
+    model_type = "image"
+
+    class Options(llm.Options):
+        steps: int = Field(default=30, description="Number of inference steps")
+        cfg_scale: float = Field(default=5, description="CFG scale")
+        enable_refiner: bool = Field(default=False, description="Enable refiner")
+        height: int = Field(default=1024, description="Image height")
+        width: int = Field(default=1024, description="Image width")
+        backend: str = Field(default="auto", description="Backend to use")
+
+        class Config:
+            extra = Extra.allow
+
+    def __init__(self, model_id, **kwargs):
+        self.model_id = model_id
+        self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
+
+    def __str__(self):
+        return f"HyperbolicImage: {self.model_id}"
+
+    @property
+    def stream(self):
+        return False
+
+    def execute(self, prompt, stream, response, conversation=None):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.get_key()}"
+        }
+
+        data = {
+            "model_name": self.model_id,
+            "prompt": prompt.prompt,
+            "steps": prompt.options.steps,
+            "cfg_scale": prompt.options.cfg_scale,
+            "enable_refiner": prompt.options.enable_refiner,
+            "height": prompt.options.height,
+            "width": prompt.options.width,
+            "backend": prompt.options.backend
+        }
+
+        response._prompt_json = data
+        api_response = requests.post(self.api_base, headers=headers, json=data)
+
+        if api_response.status_code != 200:
+            raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
+
+        response.response_json = api_response.json()
+
+        if stream:
+            yield json.dumps(response.response_json)
+        else:
+            return json.dumps(response.response_json)
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
@@ -118,11 +187,10 @@ class HyperbolicCompletion(Completion):
     model_type = "completion"
 
     def __init__(self, model_id, **kwargs):
-        # Safely retrieve optional parameters
         aliases = kwargs.pop('aliases', [])
-        super().__init__(model_id, **kwargs)  # Pass remaining kwargs to Completion.__init__
+        super().__init__(model_id, **kwargs)
         self.api_base = "https://api.hyperbolic.xyz/v1/"
-        self.aliases = aliases  # Store aliases here
+        self.aliases = aliases
 
     def __str__(self):
         return f"HyperbolicCompletion: {self.model_id}"
@@ -135,7 +203,6 @@ class HyperbolicCompletion(Completion):
                 messages.append(prev_response.text())
         messages.append(prompt.prompt)
 
-        # Include system message if provided
         if prompt.system:
             messages.insert(0, prompt.system)
 
@@ -152,7 +219,7 @@ class HyperbolicCompletion(Completion):
                 completion = client.completions.create(
                     model=self.model_name or self.model_id,
                     prompt=full_prompt,
-                    stream=True,  # Always stream for this model
+                    stream=True,
                     **kwargs,
                 )
 
@@ -173,16 +240,15 @@ class HyperbolicCompletion(Completion):
                 print(f"An error occurred: {str(e)}")
                 raise
 
-# Dictionary to store registered models
 REGISTERED_MODELS = {}
 
 def register_model(cls):
     REGISTERED_MODELS[cls.model_type] = cls
     return cls
 
-# Decorate the classes to register them
 HyperbolicChat = register_model(HyperbolicChat)
 HyperbolicCompletion = register_model(HyperbolicCompletion)
+HyperbolicImage = register_model(HyperbolicImage)
 
 @llm.hookimpl
 def register_models(register):
@@ -198,6 +264,70 @@ def register_models(register):
 
 @llm.hookimpl
 def register_commands(cli):
+    @cli.command()
+    @click.option("--model", default="hyper-flux", help="Image model to use")
+    @click.option("--prompt", required=True, help="Prompt for image generation")
+    @click.option("--steps", default=30, help="Number of inference steps")
+    @click.option("--cfg-scale", default=5.0, help="CFG scale")
+    @click.option("--enable-refiner", is_flag=True, help="Enable refiner")
+    @click.option("--height", default=1024, help="Image height")
+    @click.option("--width", default=1024, help="Image width")
+    @click.option("--backend", default="auto", help="Backend to use")
+    def generate_image(model, prompt, steps, cfg_scale, enable_refiner, height, width, backend):
+        "Generate an image using Hyperbolic API"
+        model_instance = llm.get_model(model)
+        if not isinstance(model_instance, HyperbolicImage):
+            raise click.ClickException(f"Model {model} is not an image generation model")
+
+        options = {
+            "steps": steps,
+            "cfg_scale": cfg_scale,
+            "enable_refiner": enable_refiner,
+            "height": height,
+            "width": width,
+            "backend": backend
+        }
+        response = model_instance.prompt(prompt, options=options)
+
+        # Parse the JSON response
+        try:
+            response_data = json.loads(response.text())
+        except json.JSONDecodeError:
+            raise click.ClickException("Invalid JSON response from the API")
+
+        if 'images' not in response_data or not response_data['images']:
+            raise click.ClickException("No image data received from the API")
+
+        base64_image = response_data['images'][0]['image']
+        image_data = base64.b64decode(base64_image)
+
+        # Generate a unique filename
+        base_filename = "".join(c for c in prompt if c.isalnum() or c in (' ', '_'))[:50].rstrip()
+        counter = 1
+        while True:
+            if counter == 1:
+                filename = f"{base_filename}.png"
+            else:
+                filename = f"{base_filename}_{counter}.png"
+
+            if not os.path.exists(filename):
+                break
+            counter += 1
+
+        # Save the image
+        with open(filename, "wb") as f:
+            f.write(image_data)
+
+        click.echo(f"Image saved as: {filename}")
+
+        # Display the image using imgcat
+        try:
+            subprocess.run(["imgcat", filename], check=True)
+        except subprocess.CalledProcessError:
+            click.echo("Unable to display image with imgcat. Please check if it's installed.")
+        except FileNotFoundError:
+            click.echo("imgcat not found. Please install it to display images in the terminal.")
+
     @cli.command()
     def hyperbolic_models():
         "List available Hyperbolic models"
