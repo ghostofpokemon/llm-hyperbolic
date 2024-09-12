@@ -1,5 +1,5 @@
 import requests
-from typing import Optional
+from typing import Optional, Dict
 import time
 import httpx
 import llm
@@ -7,10 +7,12 @@ from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
 import click
 from pydantic import Field, Extra
+import json
 import base64
+from io import BytesIO
+from PIL import Image
 import os
 import subprocess
-import json
 
 def get_model_ids_with_aliases():
     return [
@@ -21,8 +23,8 @@ def get_model_ids_with_aliases():
         ("SSD", ["hyper-ssd"], "image"),
         ("SDXL-turbo", ["hyper-sdxl-turbo"], "image"),
         ("playground-v2.5", ["hyper-playground"], "image"),
-        # ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
-        # ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
+        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
+        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
         # ("Fluently-XL-v4", ["hyper-fluently-xl-v4"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
         # ("Fluently-XL-Final", ["hyper-fluently-xl-final"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
         # ("PixArt-Sigma-XL-2-1024-MS", ["hyper-pixart"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
@@ -48,23 +50,41 @@ class HyperbolicImage(Model):
     model_type = "image"
 
     class Options(llm.Options):
+        height: int = Field(default=1024, description="Height of the image to generate")
+        width: int = Field(default=1024, description="Width of the image to generate")
+        backend: str = Field(default="auto", description="Computational backend (auto, tvm, torch)")
+        prompt_2: Optional[str] = Field(default=None, description="Secondary prompt for Stable Diffusion XL")
+        negative_prompt: Optional[str] = Field(default=None, description="Text specifying what the model should not generate")
+        negative_prompt_2: Optional[str] = Field(default=None, description="Secondary negative prompt for Stable Diffusion XL")
+        image: Optional[str] = Field(default=None, description="Path to reference image for img-to-img pipeline")
+        strength: Optional[float] = Field(default=None, description="Strength of transformation for img-to-img (0-1)")
+        seed: Optional[int] = Field(default=None, description="Seed for random number generation")
+        cfg_scale: float = Field(default=7.5, description="Guidance scale for image relevance to prompt")
+        sampler: Optional[str] = Field(default=None, description="Name of the sampling algorithm")
         steps: int = Field(default=30, description="Number of inference steps")
-        cfg_scale: float = Field(default=5, description="CFG scale")
-        enable_refiner: bool = Field(default=False, description="Enable refiner")
-        height: int = Field(default=1024, description="Image height")
-        width: int = Field(default=1024, description="Image width")
-        backend: str = Field(default="auto", description="Backend to use")
+        style_preset: Optional[str] = Field(default=None, description="Style preset to guide the image model")
+        enable_refiner: bool = Field(default=False, description="Enable Stable Diffusion XL-refiner")
+        controlnet_name: Optional[str] = Field(default=None, description="Name of ControlNet to use")
+        controlnet_image: Optional[str] = Field(default=None, description="Path to reference image for ControlNet")
+        loras: Optional[Dict[str, float]] = Field(default=None, description="LoRA name and weight pairs")
 
         class Config:
             extra = Extra.allow
+            protected_namespaces = ()
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id.replace("hyperbolic/", "")  # Remove "hyperbolic/" prefix if present
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
     def __str__(self):
         return f"Hyperbolic: hyperbolic/{self.model_id}"
+
+    def encode_image(self, image_path):
+        with Image.open(image_path) as img:
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
@@ -75,18 +95,24 @@ class HyperbolicImage(Model):
         data = {
             "model_name": self.model_id,
             "prompt": prompt.prompt,
-            "steps": prompt.options.steps,
-            "cfg_scale": prompt.options.cfg_scale,
-            "enable_refiner": prompt.options.enable_refiner,
             "height": prompt.options.height,
             "width": prompt.options.width,
-            "backend": prompt.options.backend
+            "backend": prompt.options.backend,
         }
 
-        # Add any additional options passed to the API request
-        for key, value in prompt.options.__dict__.items():
-            if key not in data and value is not None:
-                data[key] = value
+        optional_params = [
+            "prompt_2", "negative_prompt", "negative_prompt_2", "image", "strength",
+            "seed", "cfg_scale", "sampler", "steps", "style_preset", "enable_refiner",
+            "controlnet_name", "controlnet_image", "loras"
+        ]
+
+        for param in optional_params:
+            value = getattr(prompt.options, param)
+            if value is not None:
+                if param == "image" or param == "controlnet_image":
+                    data[param] = self.encode_image(value)
+                else:
+                    data[param] = value
 
         response._prompt_json = data
         api_response = requests.post(self.api_base, headers=headers, json=data)
@@ -100,13 +126,30 @@ class HyperbolicImage(Model):
             base64_image = response.response_json['images'][0]['image']
             image_data = base64.b64decode(base64_image)
 
-            # Create a filename that includes the entire prompt and options, without spaces
-            full_prompt = prompt.prompt
-            for key, value in prompt.options.__dict__.items():
-                if value is not None:
-                    full_prompt += f"_-o_{key}_{value}"
+            # Create a more elegant filename
+            prompt_part = "".join(c for c in prompt.prompt[:30] if c.isalnum() or c in (' ', '_')).rstrip()
+            prompt_part = prompt_part.replace(' ', '_')
 
-            base_filename = "".join(c for c in full_prompt if c.isalnum() or c in ('_'))[:200].rstrip('_')
+            options_part = []
+            important_options = ['strength', 'cfg_scale', 'steps', 'seed']
+            for key in important_options:
+                value = getattr(prompt.options, key)
+                if value is not None:
+                    options_part.append(f"{key}-{value}")
+
+            if prompt.options.image:
+                options_part.append("img2img")
+            if prompt.options.controlnet_name:
+                options_part.append(f"controlnet-{prompt.options.controlnet_name}")
+            if prompt.options.loras:
+                options_part.append("lora")
+
+            options_string = "_".join(options_part)
+
+            base_filename = f"{prompt_part}_{self.model_id}"
+            if options_string:
+                base_filename += f"_{options_string}"
+
             counter = 1
             while True:
                 if counter == 1:
@@ -122,7 +165,6 @@ class HyperbolicImage(Model):
                 f.write(image_data)
 
             response._text = f"Image saved as: {filename}"
-
 
             try:
                 subprocess.run(["imgcat", filename], check=True)

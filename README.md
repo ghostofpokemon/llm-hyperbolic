@@ -47,6 +47,27 @@ llm -m hyper-ssd "A self-aware meme realizing it's about to go viral"
 llm -m hyper-sdxl-turbo "The concept of recursion having an identity crisis"
 llm -m hyper-playground "An AI trying to pass the Turing test by pretending to be a particularly dim human"
 ```
+Now, users can use ControlNet capabilities by specifying the control image and ControlNet type in their command. For example:
+
+```bash
+llm -m hyper-sdxl "an astronaut on Mars" -o controlnet_image ./stormtrooper.png -o controlnet_type depth
+```
+
+This command will use the SDXL-ControlNet model with the depth ControlNet type, using the specified image as the control input.
+
+To support this in your plugin, you'll need to:
+
+1. Update the `get_model_ids_with_aliases()` function to include the ControlNet models:
+
+```python
+def get_model_ids_with_aliases():
+    return [
+        # ... (other models)
+        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"),
+        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"),
+        # ... (other models)
+    ]
+```
 
 ## Reflection Models
 
