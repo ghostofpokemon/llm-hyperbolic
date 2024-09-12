@@ -5,7 +5,6 @@ import httpx
 import llm
 from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
-import click
 from pydantic import Field, Extra
 import base64
 import os
@@ -21,10 +20,10 @@ def get_model_ids_with_aliases():
         ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
         ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat"),
-        ("NousResearch/Hermes-3-Llama-3.1-70B-FP8", ["hyper-hermes-70-fp8"], "chat"),
         ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
         ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
         ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
+        ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], "chat"),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat"),
         ("StableDiffusion", ["hyper-sd"], "image"),
         ("Monad", ["hyper-monad"], "image"),
@@ -52,9 +51,10 @@ class HyperbolicImage(Model):
     def __init__(self, model_id, **kwargs):
         self.model_id = model_id
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
+        self.aliases = kwargs.pop('aliases', [])
 
     def __str__(self):
-        return f"HyperbolicImage: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
 
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
@@ -81,12 +81,10 @@ class HyperbolicImage(Model):
 
         response.response_json = api_response.json()
 
-        # Process the image
         if 'images' in response.response_json and response.response_json['images']:
             base64_image = response.response_json['images'][0]['image']
             image_data = base64.b64decode(base64_image)
 
-            # Generate a unique filename
             base_filename = "".join(c for c in prompt.prompt if c.isalnum() or c in (' ', '_'))[:50].rstrip()
             counter = 1
             while True:
@@ -99,13 +97,11 @@ class HyperbolicImage(Model):
                     break
                 counter += 1
 
-            # Save the image
             with open(filename, "wb") as f:
                 f.write(image_data)
 
             response._text = f"Image saved as: {filename}"
 
-            # Display the image using imgcat
             try:
                 subprocess.run(["imgcat", filename], check=True)
             except subprocess.CalledProcessError:
@@ -146,7 +142,7 @@ class HyperbolicChat(Chat):
             self.top_p = 0.95
 
     def __str__(self):
-        return f"HyperbolicChat: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -172,7 +168,6 @@ class HyperbolicChat(Chat):
 
         messages.append({"role": "user", "content": user_message})
 
-        # Add the prefill content for reflection models
         if any(alias.startswith("hyper-reflect") for alias in self.aliases):
             messages.append({"role": "assistant", "content": "<thinking>\n"})
 
@@ -230,7 +225,7 @@ class HyperbolicCompletion(Completion):
         self.aliases = aliases
 
     def __str__(self):
-        return f"HyperbolicCompletion: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -277,16 +272,6 @@ class HyperbolicCompletion(Completion):
                 print(f"An error occurred: {str(e)}")
                 raise
 
-REGISTERED_MODELS = {}
-
-def register_model(cls):
-    REGISTERED_MODELS[cls.model_type] = cls
-    return cls
-
-HyperbolicChat = register_model(HyperbolicChat)
-HyperbolicCompletion = register_model(HyperbolicCompletion)
-HyperbolicImage = register_model(HyperbolicImage)
-
 @llm.hookimpl
 def register_models(register):
     key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
@@ -294,25 +279,14 @@ def register_models(register):
         return
     models_with_aliases = get_model_ids_with_aliases()
     for model_id, aliases, model_type in models_with_aliases:
-        model_class = REGISTERED_MODELS.get(model_type)
-        if model_class:
-            model_instance = model_class(model_id=model_id, aliases=aliases)
-            register(model_instance, aliases=aliases)
+        if model_type == "chat":
+            model_instance = HyperbolicChat(model_id=model_id, aliases=aliases)
+        elif model_type == "completion":
+            model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
+        elif model_type == "image":
+            model_instance = HyperbolicImage(model_id=model_id)
+            model_instance.aliases = aliases
+        else:
+            continue  # Skip unknown model types
 
-@llm.hookimpl
-def register_commands(cli):
-    @cli.command()
-    def hyperbolic_models():
-        "List available Hyperbolic models"
-        key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
-        if not key:
-            print("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
-            return
-        models_with_aliases = get_model_ids_with_aliases()
-        for model_id, aliases, model_type in models_with_aliases:
-            model_class = REGISTERED_MODELS.get(model_type)
-            if model_class:
-                print(f"{model_class.__name__}: {model_id}")
-            if aliases:
-                print(f"  Aliases: {', '.join(aliases)}")
-            print()
+        register(model_instance, aliases=aliases)
