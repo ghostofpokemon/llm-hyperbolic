@@ -23,8 +23,8 @@ def get_model_ids_with_aliases():
         ("SSD", ["hyper-ssd"], "image"),
         ("SDXL-turbo", ["hyper-sdxl-turbo"], "image"),
         ("playground-v2.5", ["hyper-playground"], "image"),
-        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
-        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
+        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"),
+        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"),
         # ("Fluently-XL-v4", ["hyper-fluently-xl-v4"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
         # ("Fluently-XL-Final", ["hyper-fluently-xl-final"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
         # ("PixArt-Sigma-XL-2-1024-MS", ["hyper-pixart"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}

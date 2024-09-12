@@ -24,50 +24,92 @@ Run `llm models` to list the models, and `llm models --options` to include a lis
 
 Run prompts like this:
 ```bash
-llm -m hyper-chat "What is posthuman AI consciousness like?"
+llm "What is posthuman AI consciousness like?" -m hyper-chat
 llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commune with alien neural net deities?"
-llm -m hyper-llama-70 "Enlightenment in an alien-physics universe?"
+llm "Enlightenment in an alien-physics universe?" -m hyper-seek
 llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 1
-llm -m hyper-base-fp8 "Once upon a time, in a galaxy far, far away..."
+llm "Once upon a time, in a galaxy far, far away..." -m hyper-base-fp8
 llm -m hyper-reflect "Why do cats always land on their feet? Is it a conspiracy?"
-llm -m hyper-reflect-rec "What would happen if you mixed a banana with a pineapple and the essence of existential dread?"
+llm "What would happen if you mixed a banana with a pineapple and the essence of existential dread?" -m hyper-reflect-rec
 llm -m hyper-reflect-rec-tc "How many Rs in strawberry, and why is it a metaphor for the fleeting nature of existence?"
 ```
 
 ## Image Generation
 
-Because why stop at text when you can create visual nightmares too? Try these:
+Because why stop at text? Try these:
+
+```bash
+llm "An accusatory-looking armchair in a serene forest setting" -m hyper-flux
+llm -m hyper-sdxl "The last slice of pizza, if pizza were conscious and aware of its impending doom"
+llm "A hyper-intelligent shade of the color blue contemplating its existence" -m hyper-sd15
+llm -m hyper-sd2 "The heat death of the universe, but make it cute"
+llm "A self-aware meme realizing it's about to go viral" -m hyper-ssd
+llm -m hyper-sdxl-turbo "The concept of recursion having an identity crisis"
+llm "An AI trying to pass the Turing test by pretending to be a particularly dim human" -m hyper-playground
+```
+
+## ControlNet:
+
+Enhance image-to-image by preprocessing the input with techniques like pose and edge detection. For example:
+
+```bash
+llm -m hyper-sdxl-controlnet "a chihuahua on Neptune" -o controlnet_image ./chihuahua.png -o controlnet_name depth
+llm "chihuahuas playing poker" -m hyper-sdxl-controlnet -o controlnet_image ./dogspoker.png -o controlnet_name openpose
+```
+
+This will use the ControlNet model with the depth ControlNet type, using the specified image as the control input.
+
+ControlNets available for SDXL1.0-ControlNet and SD1.5-ControlNet:
+- `canny`
+- `depth`
+- `openpose`
+- `softedge`
+
+## LoRA:
+
+Low-Rank Adaptation, minimal tweaks for significant enhancements.
+
+To use these LoRA options, add them to your command like this:
+
+```bash
+llm -m hyper-sdxl "A corporate logo for the heat death of the universe" -o lora '{"Logo": 0.8, "Sci-fi": 0.6}'
+```
+
+LoRA options for SD1.5, SDXL, or FLUX.1-dev models:
+
+- `Add_Detail`
+- `More_Art`
+- `Pixel_Art`
+- `Logo`
+- `Sci-fi`
+- `Crayons`
+- `Paint_Splash`
+- `Outdoor_Product_Photography`
+- `Superhero`
+- `Lineart`
+- `Anime_Lineart`
+- `Cartoon_Background`
+- `Pencil_Sketch`
+
+You can mix and match these LoRA options like a scientist. Just use the `-o lora` parameter with a JSON string of LoRA names and weights. The higher the value (0.0 to 1.0), the stronger the effect.
+
+Combining all LoRA options at once may result in an image so complex it achieves sentience. Use at your own risk.
 
 ```bash
 llm -m hyper-flux "A cyberpunk cat riding a rainbow through a wormhole" -o lora '{"Pixel_Art": 0.7, "Superhero": 0.9}'
-llm -m hyper-sdxl "The last slice of pizza, if pizza were conscious and aware of its impending doom"
-llm -m hyper-sd15 "A hyper-intelligent shade of the color blue contemplating its existence"
-llm -m hyper-sd2 "The heat death of the universe, but make it cute"
-llm -m hyper-ssd "A self-aware meme realizing it's about to go viral"
-llm -m hyper-sdxl-turbo "The concept of recursion having an identity crisis"
-llm -m hyper-playground "An AI trying to pass the Turing test by pretending to be a particularly dim human"
+
+llm "A logo for 'Xenomorph-B-Gone: We zap 'em, you nap 'em'" -m hyper-sdxl -o loras '{"Add_Detail": 0.6, "Sci-fi": 0.7, "Logo": 0.8}'
+
+llm -m hyper-sd15 "A superhero named 'The Awkward Silencer' in action" -o loras '{"Superhero": 0.7, "Pencil_Sketch": 0.6}'
+
+llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o loras '{"Crayons": 0.9, "Add_Detail": 0.4, "Outdoor_Product_Photography": 0.8}'
+
+llm -m hyper-sd15 "A cozy living room with eldritch horrors lurking in the corners" -o loras '{"Cartoon_Background": 0.8, "Add_Detail": 0.5}'
+
+llm "Anthropomorphic emotions brawling in a dive bar" -m hyper-flux -o loras '{"Paint_Splash": 0.7, "Add_Detail": 0.6}'
 ```
-Now, users can use ControlNet capabilities by specifying the control image and ControlNet type in their command. For example:
 
-```bash
-llm -m hyper-sdxl "an astronaut on Mars" -o controlnet_image ./stormtrooper.png -o controlnet_type depth
-```
-
-This command will use the SDXL-ControlNet model with the depth ControlNet type, using the specified image as the control input.
-
-To support this in your plugin, you'll need to:
-
-1. Update the `get_model_ids_with_aliases()` function to include the ControlNet models:
-
-```python
-def get_model_ids_with_aliases():
-    return [
-        # ... (other models)
-        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"),
-        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"),
-        # ... (other models)
-    ]
-```
+Don't let your memes be dreams!
 
 ## Reflection Models
 
