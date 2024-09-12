@@ -25,6 +25,7 @@ def get_model_ids_with_aliases():
         ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
         ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
         ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
+        ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat"),
         ("StableDiffusion", ["hyper-sd"], "image"),
         ("Monad", ["hyper-monad"], "image"),
         ("Wifhat", ["hyper-wifhat"], "image"),
