@@ -82,16 +82,39 @@ Minimal tweaks for significant enhancements.
 ```bash
 llm "A cyberpunk cat riding a rainbow through a wormhole" -m hyper-flux -o lora '{"Pixel_Art": 0.7, "Superhero": 0.9}'
 llm -m hyper-sdxl "A corporate logo for the heat death of the universe" -o lora '{"Logo": 0.8, "Sci-fi": 0.6}'
-llm "A logo for 'Xenomorph-B-Gone: We zap 'em, you nap 'em'" -m hyper-sdxl -o loras '{"Add_Detail": 0.6, "Sci-fi": 0.7, "Logo": 0.8}'
-llm -m hyper-sd15 "A superhero named 'The Awkward Silencer' in action" -o loras '{"Superhero": 0.7, "Pencil_Sketch": 0.6}'
-llm "Anthropomorphic emotions brawling in a dive bar" -m hyper-flux -o loras '{"Paint_Splash": 0.7, "Add_Detail": 0.6}'
-llm -m hyper-sd15 "A cozy living room with eldritch horrors lurking in the corners" -o loras '{"Cartoon_Background": 0.8, "Add_Detail": 0.5}'
-llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o loras '{"Crayons": 0.9, "Add_Detail": 0.4, "Outdoor_Product_Photography": 0.8}'
+llm "A logo for 'Xenomorph-B-Gone: We zap 'em, you nap 'em'" -m hyper-sdxl -o lora '{"Add_Detail": 0.6, "Sci-fi": 0.7, "Logo": 0.8}'
+llm -m hyper-sd15 "A superhero named 'The Awkward Silencer' in action" -o lora '{"Superhero": 0.7, "Pencil_Sketch": 0.6}'
+llm "Anthropomorphic emotions brawling in a dive bar" -m hyper-flux -o lora '{"Paint_Splash": 0.7, "Add_Detail": 0.6}'
+llm -m hyper-sd15 "A cozy living room with eldritch horrors lurking in the corners" -o lora '{"Cartoon_Background": 0.8, "Add_Detail": 0.5}'
+llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o lora '{"Crayons": 0.9, "Add_Detail": 0.4, "Outdoor_Product_Photography": 0.8}'
 
 ```
 
 LoRA options for SD1.5, SDXL, or FLUX.1-dev models:
 `Add_Detail`, `More_Art`, `Pixel_Art`, `Logo`, `Sci-fi`, `Crayons`, `Paint_Splash`, `Outdoor_Product_Photography`, `Superhero`, `Lineart`, `Anime_Lineart`, `Cartoon_Background`, `Pencil_Sketch`
+
+## Samplers
+
+Samplers are algorithms used in the image generation process. Different samplers can produce varying results in terms of image quality, generation speed, and stylistic outcomes. Here's a list of available samplers:
+
+`DDIM`, `DDPM`, `DEIS 2M`, `DPM 2M`, `DPM 2S`, `DPM SDE`, `DPM SDE Karras`, `DPM++ 2M`, `DPM++ 2M Karras`, `DPM++ 2M SDE`, `DPM++ 2M SDE Heun`, `DPM++ 2M SDE Heun Karras`, `DPM++ 2M SDE Karras`, `DPM++ 2S`, `DPM2`, `DPM2 Karras`, `DPM2 a`, `DPM2 a Karras`, `EDM_Euler`, `Euler`, `Euler a`, `Heun`, `LCM`, `LMS`, `LMS Karras`, `PNDM`, `UniPC 2M`
+
+To use a specific sampler, add the `-o sampler` option to your command:
+
+```bash
+llm "A serene landscape with a misty lake" -m hyper-sdxl -o sampler "DPM++ 2M Karras"
+```
+
+Popular choices and their characteristics:
+
+- `Euler a`: A good balance of speed and quality, often used as a default.
+- `DPM++ 2M Karras`: Known for high-quality results with fewer steps.
+- `DDIM`: Produces sharp, detailed results and is deterministic (same seed always produces the same result).
+- `UniPC 2M`: Efficient and high-quality, especially with higher step counts.
+- `LCM` (Latent Consistency Model): A newer, faster sampling method.
+- `Heun`: Can produce high-quality results but may require more steps.
+
+Experimenting with different samplers can lead to unique and interesting results. The effectiveness of each sampler can vary depending on the specific image, prompt, and desired outcome.
 
 ## Available Options
 
@@ -144,9 +167,9 @@ Here's a list of all available options for image generation. Mix and match for m
   llm "A dragon made of cosmic dust" -m hyper-sdxl -o cfg_scale 15
   ```
 
-- `sampler`: Algorithm for image generation
+- `sampler`: Algorithm for image generation (see Sampler section)
   ```bash
-  llm "The sound of silence, visualized" -m hyper-sd2 -o sampler euler_a
+  llm "The sound of silence, visualized" -m hyper-sd2 -o sampler "Euler a"
   ```
 
 - `steps`: Number of inference steps (default: 30)
@@ -168,7 +191,7 @@ Here's a list of all available options for image generation. Mix and match for m
 
 - `controlnet_image`: Reference image for ControlNet (see ControlNet section)
 
-- `loras`: LoRA name and weight pairs (see LoRA section)
+- `lora`: LoRA name and weight pairs (see LoRA section)
 
 Don't let your memes be dreams!
 

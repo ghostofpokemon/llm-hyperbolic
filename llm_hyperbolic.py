@@ -43,6 +43,8 @@ def get_model_ids_with_aliases():
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat"),
     ]
 
+
+
 class HyperbolicImage(Model):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
