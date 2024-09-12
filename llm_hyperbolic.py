@@ -347,9 +347,9 @@ def register_models(register):
         elif model_type == "completion":
             model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
         elif model_type == "image":
-            model_instance = HyperbolicImage(model_id=f"hyperbolic/{model_id}")
+            model_instance = HyperbolicImage(model_id=model_id)
             model_instance.aliases = aliases
         else:
             continue  # Skip unknown model types
 
-        register(model_instance, aliases=["hyperbolic/" + model_id] + aliases)
+        register(model_instance, aliases=aliases)
