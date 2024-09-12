@@ -5,6 +5,7 @@ import httpx
 import llm
 from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
+import click
 from pydantic import Field, Extra
 import base64
 import os
@@ -13,6 +14,19 @@ import json
 
 def get_model_ids_with_aliases():
     return [
+        ("FLUX.1-dev", ["hyper-flux"], "image"),
+        ("SDXL1.0-base", ["hyper-sdxl"], "image"),
+        ("SD1.5", ["hyper-sd15"], "image"),
+        ("SD2", ["hyper-sd2"], "image"),
+        ("SSD", ["hyper-ssd"], "image"),
+        ("SDXL-turbo", ["hyper-sdxl-turbo"], "image"),
+        ("playground-v2.5", ["hyper-playground"], "image"),
+        # ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
+        # ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Please provide contorlnet_name for ControlNet Stable Diffusion Models.Available ControlNet for SD1.5-ControlNet: ['canny', 'softedge', 'depth', 'openpose', 'lineart'].","code":40302}
+        # ("Fluently-XL-v4", ["hyper-fluently-xl-v4"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
+        # ("Fluently-XL-Final", ["hyper-fluently-xl-final"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
+        # ("PixArt-Sigma-XL-2-1024-MS", ["hyper-pixart"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
+        # ("dreamshaper-xl-lightning", ["hyper-dreamshaper"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
         ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect"], "chat"),
         ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),
         ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),
@@ -25,10 +39,6 @@ def get_model_ids_with_aliases():
         ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
         ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], "chat"),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat"),
-        ("StableDiffusion", ["hyper-sd"], "image"),
-        ("Monad", ["hyper-monad"], "image"),
-        ("Wifhat", ["hyper-wifhat"], "image"),
-        ("FLUX.1-dev", ["hyper-flux"], "image"),
     ]
 
 class HyperbolicImage(Model):
@@ -49,12 +59,12 @@ class HyperbolicImage(Model):
             extra = Extra.allow
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id
+        self.model_id = model_id.replace("hyperbolic/", "")  # Remove "hyperbolic/" prefix if present
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
     def __str__(self):
-        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
 
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
@@ -73,6 +83,11 @@ class HyperbolicImage(Model):
             "backend": prompt.options.backend
         }
 
+        # Add any additional options passed to the API request
+        for key, value in prompt.options.__dict__.items():
+            if key not in data and value is not None:
+                data[key] = value
+
         response._prompt_json = data
         api_response = requests.post(self.api_base, headers=headers, json=data)
 
@@ -85,7 +100,13 @@ class HyperbolicImage(Model):
             base64_image = response.response_json['images'][0]['image']
             image_data = base64.b64decode(base64_image)
 
-            base_filename = "".join(c for c in prompt.prompt if c.isalnum() or c in (' ', '_'))[:50].rstrip()
+            # Create a filename that includes the entire prompt and options, without spaces
+            full_prompt = prompt.prompt
+            for key, value in prompt.options.__dict__.items():
+                if value is not None:
+                    full_prompt += f"_-o_{key}_{value}"
+
+            base_filename = "".join(c for c in full_prompt if c.isalnum() or c in ('_'))[:200].rstrip('_')
             counter = 1
             while True:
                 if counter == 1:
@@ -101,6 +122,7 @@ class HyperbolicImage(Model):
                 f.write(image_data)
 
             response._text = f"Image saved as: {filename}"
+
 
             try:
                 subprocess.run(["imgcat", filename], check=True)
@@ -120,7 +142,6 @@ class HyperbolicImage(Model):
         response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
         result = self.execute(llm_prompt, stream=stream, response=response)
         return response
-
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
@@ -142,7 +163,7 @@ class HyperbolicChat(Chat):
             self.top_p = 0.95
 
     def __str__(self):
-        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -225,7 +246,7 @@ class HyperbolicCompletion(Completion):
         self.aliases = aliases
 
     def __str__(self):
-        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -284,9 +305,9 @@ def register_models(register):
         elif model_type == "completion":
             model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
         elif model_type == "image":
-            model_instance = HyperbolicImage(model_id=model_id)
+            model_instance = HyperbolicImage(model_id=f"hyperbolic/{model_id}")
             model_instance.aliases = aliases
         else:
             continue  # Skip unknown model types
 
-        register(model_instance, aliases=aliases)
+        register(model_instance, aliases=["hyperbolic/" + model_id] + aliases)
