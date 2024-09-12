@@ -1,2 +1,0 @@
-[llm]
-hyperbolic = llm_hyperbolic
