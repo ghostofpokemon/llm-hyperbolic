@@ -6,13 +6,12 @@ from llm.default_plugins.openai_models import Chat, Completion
 def get_model_ids_with_aliases():
     return [
         ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect"], "chat"),
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),  # New model with recommended settings
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),  # New model with think carefully
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),
         ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion"),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
         ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat"),
-        ("NousResearch/Hermes-3-Llama-3.1-70B-FP8", ["hyper-hermes-70-fp8"], "chat"),
         ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
         ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
         ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
@@ -40,7 +39,7 @@ class HyperbolicChat(Chat):
             self.top_p = 0.95
 
     def __str__(self):
-        return f"HyperbolicChat: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -66,7 +65,6 @@ class HyperbolicChat(Chat):
 
         messages.append({"role": "user", "content": user_message})
 
-        # Add the prefill content for reflection models
         if any(alias.startswith("hyper-reflect") for alias in self.aliases):
             messages.append({"role": "assistant", "content": "<thinking>\n"})
 
@@ -118,14 +116,13 @@ class HyperbolicCompletion(Completion):
     model_type = "completion"
 
     def __init__(self, model_id, **kwargs):
-        # Safely retrieve optional parameters
         aliases = kwargs.pop('aliases', [])
-        super().__init__(model_id, **kwargs)  # Pass remaining kwargs to Completion.__init__
+        super().__init__(model_id, **kwargs)
         self.api_base = "https://api.hyperbolic.xyz/v1/"
-        self.aliases = aliases  # Store aliases here
+        self.aliases = aliases
 
     def __str__(self):
-        return f"HyperbolicCompletion: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id} (aliases: {', '.join(self.aliases)})"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -135,7 +132,6 @@ class HyperbolicCompletion(Completion):
                 messages.append(prev_response.text())
         messages.append(prompt.prompt)
 
-        # Include system message if provided
         if prompt.system:
             messages.insert(0, prompt.system)
 
@@ -152,7 +148,7 @@ class HyperbolicCompletion(Completion):
                 completion = client.completions.create(
                     model=self.model_name or self.model_id,
                     prompt=full_prompt,
-                    stream=True,  # Always stream for this model
+                    stream=True,
                     **kwargs,
                 )
 
@@ -173,17 +169,6 @@ class HyperbolicCompletion(Completion):
                 print(f"An error occurred: {str(e)}")
                 raise
 
-# Dictionary to store registered models
-REGISTERED_MODELS = {}
-
-def register_model(cls):
-    REGISTERED_MODELS[cls.model_type] = cls
-    return cls
-
-# Decorate the classes to register them
-HyperbolicChat = register_model(HyperbolicChat)
-HyperbolicCompletion = register_model(HyperbolicCompletion)
-
 @llm.hookimpl
 def register_models(register):
     key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
@@ -191,25 +176,11 @@ def register_models(register):
         return
     models_with_aliases = get_model_ids_with_aliases()
     for model_id, aliases, model_type in models_with_aliases:
-        model_class = REGISTERED_MODELS.get(model_type)
-        if model_class:
-            model_instance = model_class(model_id=model_id, aliases=aliases)
-            register(model_instance, aliases=aliases)
+        if model_type == "chat":
+            model_instance = HyperbolicChat(model_id=model_id, aliases=aliases)
+        elif model_type == "completion":
+            model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
+        else:
+            continue  # Skip unknown model types
 
-@llm.hookimpl
-def register_commands(cli):
-    @cli.command()
-    def hyperbolic_models():
-        "List available Hyperbolic models"
-        key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
-        if not key:
-            print("Hyperbolic API key not set. Use 'llm keys set hyperbolic' to set it.")
-            return
-        models_with_aliases = get_model_ids_with_aliases()
-        for model_id, aliases, model_type in models_with_aliases:
-            model_class = REGISTERED_MODELS.get(model_type)
-            if model_class:
-                print(f"{model_class.__name__}: {model_id}")
-            if aliases:
-                print(f"  Aliases: {', '.join(aliases)}")
-            print()
+        register(model_instance, aliases=aliases)
