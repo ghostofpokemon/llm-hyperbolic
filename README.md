@@ -3,24 +3,24 @@
 [![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/ghostofpokemon/llm-hyperbolic?include_prereleases)](https://github.com/ghostofpokemon/llm-hyperbolic/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/ghostofpokemon/llm-hyperbolic/blob/main/LICENSE)
 
-LLM access to cutting-edge Hyperbolic models by Meta Llama. Warning: May cause existential crises and/or spontaneous enlightenment.
+LLM access to Hyperbolic.
 
 ## Installation
-Install this plugin in the same environment as [LLM](https://llm.datasette.io/). Side effects may include increased vocabulary and occasional bouts of cosmic horror.
+Install this plugin in the same environment as [LLM](https://llm.datasette.io/).
 
 ```bash
 llm install llm-hyperbolic
 ```
 
 ## Usage
-First, set an [API key](https://app.hyperbolic.xyz/settings) for Hyperbolic. Don't worry, it only requires a small blood sacrifice:
+First, set an [API key](https://app.hyperbolic.xyz/settings) for Hyperbolic:
 
 ```bash
 llm keys set hyperbolic
-# Paste key here (and maybe your soul)
+# Paste key here
 ```
 
-Run `llm models` to list the models, and `llm models --options` to include a list of their options. Warning: Some models may try to convince you they're sentient. Ignore them. Probably.
+Run `llm models` to list the models, and `llm models --options` to include a list of their options.
 
 Run prompts like this:
 ```bash
@@ -48,8 +48,18 @@ llm -m hyper-sdxl-turbo "The concept of recursion having an identity crisis"
 llm "An AI trying to pass the Turing test by pretending to be a particularly dim human" -m hyper-playground
 ```
 
-## ControlNet:
+### Image-to-Image (img2img)
 
+Transform existing images:
+
+```bash
+llm "A cyberpunk version of the Mona Lisa" -m hyper-sdxl -o image ./mona_lisa.jpg -o strength 0.75
+llm -m hyper-sd15 "A post-apocalyptic version of the Eiffel Tower" -o image ./eiffel_tower.png -o strength 0.8
+```
+
+The `strength` parameter (0.0 to 1.0) determines how much to transform the input image. Lower values preserve more of the original, while higher values allow for more drastic changes.
+
+### ControlNet
 Enhance image-to-image by preprocessing the input with techniques like pose and edge detection. For example:
 
 ```bash
@@ -57,7 +67,7 @@ llm -m hyper-sdxl-controlnet "a chihuahua on Neptune" -o controlnet_image ./chih
 llm "chihuahuas playing poker" -m hyper-sdxl-controlnet -o controlnet_image ./dogspoker.png -o controlnet_name openpose
 ```
 
-This will use the ControlNet model with the depth ControlNet type, using the specified image as the control input.
+This will use the ControlNet model with the ControlNet type, using the specified image as the control input.
 
 ControlNets available for SDXL1.0-ControlNet and SD1.5-ControlNet:
 - `canny`
@@ -65,49 +75,100 @@ ControlNets available for SDXL1.0-ControlNet and SD1.5-ControlNet:
 - `openpose`
 - `softedge`
 
-## LoRA:
+### LoRA (Low-Rank Adaptation)
 
-Low-Rank Adaptation, minimal tweaks for significant enhancements.
-
-To use these LoRA options, add them to your command like this:
+Minimal tweaks for significant enhancements.
 
 ```bash
+llm "A cyberpunk cat riding a rainbow through a wormhole" -m hyper-flux -o lora '{"Pixel_Art": 0.7, "Superhero": 0.9}'
 llm -m hyper-sdxl "A corporate logo for the heat death of the universe" -o lora '{"Logo": 0.8, "Sci-fi": 0.6}'
+llm "A logo for 'Xenomorph-B-Gone: We zap 'em, you nap 'em'" -m hyper-sdxl -o loras '{"Add_Detail": 0.6, "Sci-fi": 0.7, "Logo": 0.8}'
+llm -m hyper-sd15 "A superhero named 'The Awkward Silencer' in action" -o loras '{"Superhero": 0.7, "Pencil_Sketch": 0.6}'
+llm "Anthropomorphic emotions brawling in a dive bar" -m hyper-flux -o loras '{"Paint_Splash": 0.7, "Add_Detail": 0.6}'
+llm -m hyper-sd15 "A cozy living room with eldritch horrors lurking in the corners" -o loras '{"Cartoon_Background": 0.8, "Add_Detail": 0.5}'
+llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o loras '{"Crayons": 0.9, "Add_Detail": 0.4, "Outdoor_Product_Photography": 0.8}'
+
 ```
 
 LoRA options for SD1.5, SDXL, or FLUX.1-dev models:
+`Add_Detail`, `More_Art`, `Pixel_Art`, `Logo`, `Sci-fi`, `Crayons`, `Paint_Splash`, `Outdoor_Product_Photography`, `Superhero`, `Lineart`, `Anime_Lineart`, `Cartoon_Background`, `Pencil_Sketch`
 
-- `Add_Detail`
-- `More_Art`
-- `Pixel_Art`
-- `Logo`
-- `Sci-fi`
-- `Crayons`
-- `Paint_Splash`
-- `Outdoor_Product_Photography`
-- `Superhero`
-- `Lineart`
-- `Anime_Lineart`
-- `Cartoon_Background`
-- `Pencil_Sketch`
+## Available Options
 
-You can mix and match these LoRA options like a scientist. Just use the `-o lora` parameter with a JSON string of LoRA names and weights. The higher the value (0.0 to 1.0), the stronger the effect.
+Here's a list of all available options for image generation. Mix and match for maximum chaos:
 
-Combining all LoRA options at once may result in an image so complex it achieves sentience. Use at your own risk.
+- `height`: Height of the image (default: 1024)
+  ```bash
+  llm "A skyscraper made of jelly" -m hyper-sdxl -o height 1280
+  ```
 
-```bash
-llm -m hyper-flux "A cyberpunk cat riding a rainbow through a wormhole" -o lora '{"Pixel_Art": 0.7, "Superhero": 0.9}'
+- `width`: Width of the image (default: 1024)
+  ```bash
+  llm "An infinitely long cat" -m hyper-sd15 -o width 1920
+  ```
 
-llm "A logo for 'Xenomorph-B-Gone: We zap 'em, you nap 'em'" -m hyper-sdxl -o loras '{"Add_Detail": 0.6, "Sci-fi": 0.7, "Logo": 0.8}'
+- `backend`: Computational backend (`auto`, `tvm`, `torch`)
+  ```bash
+  llm "A quantum computer made of cheese" -m hyper-sdxl -o backend torch
+  ```
 
-llm -m hyper-sd15 "A superhero named 'The Awkward Silencer' in action" -o loras '{"Superhero": 0.7, "Pencil_Sketch": 0.6}'
+- `prompt_2`: Secondary prompt for SDXL models
+  ```bash
+  llm "A majestic lion" -m hyper-sdxl -o prompt_2 "photorealistic, detailed fur"
+  ```
 
-llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o loras '{"Crayons": 0.9, "Add_Detail": 0.4, "Outdoor_Product_Photography": 0.8}'
+- `negative_prompt`: What the model should avoid
+  ```bash
+  llm "A serene forest" -m hyper-sd2 -o negative_prompt "people, buildings, technology"
+  ```
 
-llm -m hyper-sd15 "A cozy living room with eldritch horrors lurking in the corners" -o loras '{"Cartoon_Background": 0.8, "Add_Detail": 0.5}'
+- `negative_prompt_2`: Secondary negative prompt for SDXL models
+  ```bash
+  llm "A futuristic city" -m hyper-sdxl -o negative_prompt "old, rundown" -o negative_prompt_2 "dystopian, post-apocalyptic"
+  ```
 
-llm "Anthropomorphic emotions brawling in a dive bar" -m hyper-flux -o loras '{"Paint_Splash": 0.7, "Add_Detail": 0.6}'
-```
+- `image`: Reference image for img2img (see img2img section)
+
+- `strength`: Transformation strength for img2img (0.0 to 1.0)
+  ```bash
+  llm "A steampunk version of the Statue of Liberty" -m hyper-sdxl -o image ./statue_of_liberty.jpg -o strength 0.85
+  ```
+
+- `seed`: Fix randomness for reproducible results
+  ```bash
+  llm "The meaning of life represented as an abstract painting" -m hyper-sd15 -o seed 42
+  ```
+
+- `cfg_scale`: Guidance scale for image relevance to prompt (default: 7.5)
+  ```bash
+  llm "A dragon made of cosmic dust" -m hyper-sdxl -o cfg_scale 15
+  ```
+
+- `sampler`: Algorithm for image generation
+  ```bash
+  llm "The sound of silence, visualized" -m hyper-sd2 -o sampler euler_a
+  ```
+
+- `steps`: Number of inference steps (default: 30)
+  ```bash
+  llm "A fractal representation of infinity" -m hyper-sdxl -o steps 50
+  ```
+
+- `style_preset`: Guide the image model towards a particular style
+  ```bash
+  llm "A bustling alien marketplace" -m hyper-sd15 -o style_preset anime
+  ```
+
+- `enable_refiner`: Enable SDXL-refiner (SDXL models only)
+  ```bash
+  llm "A hyperrealistic portrait of a time traveler" -m hyper-sdxl -o enable_refiner true
+  ```
+
+- `controlnet_name`: Type of ControlNet to use (see ControlNet section)
+
+- `controlnet_image`: Reference image for ControlNet (see ControlNet section)
+
+- `loras`: LoRA name and weight pairs (see LoRA section)
 
 Don't let your memes be dreams!
 
