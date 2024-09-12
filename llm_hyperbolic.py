@@ -55,10 +55,6 @@ class HyperbolicImage(Model):
     def __str__(self):
         return f"HyperbolicImage: {self.model_id}"
 
-    @property
-    def stream(self):
-        return False
-
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
             "Content-Type": "application/json",
@@ -84,10 +80,50 @@ class HyperbolicImage(Model):
 
         response.response_json = api_response.json()
 
-        if stream:
-            yield json.dumps(response.response_json)
+        # Process the image
+        if 'images' in response.response_json and response.response_json['images']:
+            base64_image = response.response_json['images'][0]['image']
+            image_data = base64.b64decode(base64_image)
+
+            # Generate a unique filename
+            base_filename = "".join(c for c in prompt.prompt if c.isalnum() or c in (' ', '_'))[:50].rstrip()
+            counter = 1
+            while True:
+                if counter == 1:
+                    filename = f"{base_filename}.png"
+                else:
+                    filename = f"{base_filename}_{counter}.png"
+
+                if not os.path.exists(filename):
+                    break
+                counter += 1
+
+            # Save the image
+            with open(filename, "wb") as f:
+                f.write(image_data)
+
+            response._text = f"Image saved as: {filename}"
+
+            # Display the image using imgcat
+            try:
+                subprocess.run(["imgcat", filename], check=True)
+            except subprocess.CalledProcessError:
+                response._text += "\nUnable to display image with imgcat. Please check if it's installed."
+            except FileNotFoundError:
+                response._text += "\nimgcat not found. Please install it to display images in the terminal."
         else:
-            return json.dumps(response.response_json)
+            response._text = "No image data received from the API"
+
+        return response._text
+
+    def prompt(self, prompt, *args, **kwargs):
+        stream = kwargs.pop('stream', False)
+        options = self.Options(**kwargs)
+        llm_prompt = llm.Prompt(prompt, model=self, options=options)
+        response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
+        result = self.execute(llm_prompt, stream=stream, response=response)
+        return response
+
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
@@ -264,70 +300,6 @@ def register_models(register):
 
 @llm.hookimpl
 def register_commands(cli):
-    @cli.command()
-    @click.option("--model", default="hyper-flux", help="Image model to use")
-    @click.option("--prompt", required=True, help="Prompt for image generation")
-    @click.option("--steps", default=30, help="Number of inference steps")
-    @click.option("--cfg-scale", default=5.0, help="CFG scale")
-    @click.option("--enable-refiner", is_flag=True, help="Enable refiner")
-    @click.option("--height", default=1024, help="Image height")
-    @click.option("--width", default=1024, help="Image width")
-    @click.option("--backend", default="auto", help="Backend to use")
-    def generate_image(model, prompt, steps, cfg_scale, enable_refiner, height, width, backend):
-        "Generate an image using Hyperbolic API"
-        model_instance = llm.get_model(model)
-        if not isinstance(model_instance, HyperbolicImage):
-            raise click.ClickException(f"Model {model} is not an image generation model")
-
-        options = {
-            "steps": steps,
-            "cfg_scale": cfg_scale,
-            "enable_refiner": enable_refiner,
-            "height": height,
-            "width": width,
-            "backend": backend
-        }
-        response = model_instance.prompt(prompt, options=options)
-
-        # Parse the JSON response
-        try:
-            response_data = json.loads(response.text())
-        except json.JSONDecodeError:
-            raise click.ClickException("Invalid JSON response from the API")
-
-        if 'images' not in response_data or not response_data['images']:
-            raise click.ClickException("No image data received from the API")
-
-        base64_image = response_data['images'][0]['image']
-        image_data = base64.b64decode(base64_image)
-
-        # Generate a unique filename
-        base_filename = "".join(c for c in prompt if c.isalnum() or c in (' ', '_'))[:50].rstrip()
-        counter = 1
-        while True:
-            if counter == 1:
-                filename = f"{base_filename}.png"
-            else:
-                filename = f"{base_filename}_{counter}.png"
-
-            if not os.path.exists(filename):
-                break
-            counter += 1
-
-        # Save the image
-        with open(filename, "wb") as f:
-            f.write(image_data)
-
-        click.echo(f"Image saved as: {filename}")
-
-        # Display the image using imgcat
-        try:
-            subprocess.run(["imgcat", filename], check=True)
-        except subprocess.CalledProcessError:
-            click.echo("Unable to display image with imgcat. Please check if it's installed.")
-        except FileNotFoundError:
-            click.echo("imgcat not found. Please install it to display images in the terminal.")
-
     @cli.command()
     def hyperbolic_models():
         "List available Hyperbolic models"
