@@ -45,7 +45,7 @@ def get_model_ids_with_aliases():
 
 
 
-class HyperbolicImage(Model):
+class HyperbolicImage(llm.Model):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     can_stream = False
@@ -88,6 +88,7 @@ class HyperbolicImage(Model):
             img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
+
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
             "Content-Type": "application/json",
@@ -111,24 +112,46 @@ class HyperbolicImage(Model):
         for param in optional_params:
             value = getattr(prompt.options, param)
             if value is not None:
-                if param == "image" or param == "controlnet_image":
+                if param in ["image", "controlnet_image"]:
                     data[param] = self.encode_image(value)
                 else:
                     data[param] = value
 
         response._prompt_json = data
-        api_response = requests.post(self.api_base, headers=headers, json=data)
 
-        if api_response.status_code != 200:
-            raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
+        retries = 3
+        delay = 15  # seconds
 
-        response.response_json = api_response.json()
+        for attempt in range(retries):
+            api_response = requests.post(self.api_base, headers=headers, json=data)
+
+            if api_response.status_code == 200:
+                response.response_json = api_response.json()
+                break  # Exit the retry loop if successful
+            elif api_response.status_code == 429:
+                print(f"Rate limit exceeded (429). Retrying in {delay} seconds...")
+                for remaining in range(delay, 0, -1):
+                    print(f"Retrying in {remaining} seconds...", end="\r")
+                    time.sleep(1)
+                delay *= 2  # Exponential backoff
+            else:
+                error_data = json.loads(api_response.text)
+                if "style_preset" in error_data.get("message", ""):
+                    available_presets = error_data["message"].split("Available style_preset: ")[-1].strip("[]").replace("'", "").split(", ")
+                    print(f"Error: The style preset you provided is not supported.")
+                    chosen_preset = input(f"Please choose one from the available styles: {tuple(available_presets)}: ").strip()
+                    if chosen_preset in available_presets:
+                        prompt.options.style_preset = chosen_preset
+                        return self.execute(prompt, stream, response, conversation)
+                    else:
+                        return "Invalid style preset chosen. Please try again with a valid preset."
+                else:
+                    raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 
         if 'images' in response.response_json and response.response_json['images']:
             base64_image = response.response_json['images'][0]['image']
             image_data = base64.b64decode(base64_image)
 
-            # Create a more elegant filename
             prompt_part = "".join(c for c in prompt.prompt[:30] if c.isalnum() or c in (' ', '_')).rstrip()
             prompt_part = prompt_part.replace(' ', '_')
 

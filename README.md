@@ -93,6 +93,7 @@ llm "The heat death of the universe, but make it cute" -m hyper-sdxl -o lora '{"
 LoRA options for SD1.5, SDXL, or FLUX.1-dev models:
 `Add_Detail`, `More_Art`, `Pixel_Art`, `Logo`, `Sci-fi`, `Crayons`, `Paint_Splash`, `Outdoor_Product_Photography`, `Superhero`, `Lineart`, `Anime_Lineart`, `Cartoon_Background`, `Pencil_Sketch`
 
+
 ## Samplers
 
 Samplers are algorithms used in the image generation process. Different samplers can produce varying results in terms of image quality, generation speed, and stylistic outcomes. Here's a list of available samplers:
@@ -115,6 +116,12 @@ Popular choices and their characteristics:
 - `Heun`: Can produce high-quality results but may require more steps.
 
 Experimenting with different samplers can lead to unique and interesting results. The effectiveness of each sampler can vary depending on the specific image, prompt, and desired outcome.
+
+## Style Presets
+
+Style presets allow you to quickly apply specific artistic styles or visual themes to your generated images. Here's a list of available style presets:
+
+`monad`, `base`, `3D Model`, `Analog Film`, `Anime`, `Cinematic`, `Comic Book`, `Craft Clay`, `Digital Art`, `Enhance`, `Fantasy Art`, `Isometric Style`, `Line Art`, `Lowpoly`, `Neon Punk`, `Origami`, `Photographic`, `Pixel Art`, `Texture`, `Advertising`, `Food Photography`, `Real Estate`, `Abstract`, `Cubist`, `Graffiti`, `Hyperrealism`, `Impressionist`, `Pointillism`, `Pop Art`, `Psychedelic`, `Renaissance`, `Steampunk`, `Surrealist`, `Typography`, `Watercolor`, `Fighting Game`, `GTA`, `Super Mario`, `Minecraft`, `Pokemon`, `Retro Arcade`, `Retro Game`, `RPG Fantasy Game`, `Strategy Game`, `Street Fighter`, `Legend of Zelda`, `Architectural`, `Disco`, `Dreamscape`, `Dystopian`, `Fairy Tale`, `Gothic`, `Grunge`, `Horror`, `Minimalist`, `Monochrome`, `Nautical`, `Space`, `Stained Glass`, `Techwear Fashion`, `Tribal`, `Zentangle`, `Collage`, `Flat Papercut`, `Kirigami`, `Paper Mache`, `Paper Quilling`, `Papercut Collage`, `Papercut Shadow Box`, `Stacked Papercut`, `Thick Layered Papercut`, `Alien`, `Film Noir`, `HDR`, `Long Exposure`, `Neon Noir`, `Silhouette`, `Tilt-Shift`
 
 ## Available Options
 
@@ -177,7 +184,7 @@ Here's a list of all available options for image generation. Mix and match for m
   llm "A fractal representation of infinity" -m hyper-sdxl -o steps 50
   ```
 
-- `style_preset`: Guide the image model towards a particular style
+- `style_preset`: Guide the image model towards a particular style (see Style Presets section)
   ```bash
   llm "A bustling alien marketplace" -m hyper-sd15 -o style_preset anime
   ```
