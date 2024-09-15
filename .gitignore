@@ -9,6 +9,9 @@ __pycache__/
 #images
 *.png
 *.webp
+*.jpg
+
+.DS_Store
 
 # Distribution / packaging
 .Python
