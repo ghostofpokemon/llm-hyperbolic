@@ -16,36 +16,33 @@ import subprocess
 
 def get_model_ids_with_aliases():
     return [
-        ("FLUX.1-dev", ["hyper-flux"], "image"),
-        ("SDXL1.0-base", ["hyper-sdxl"], "image"),
-        ("SD1.5", ["hyper-sd15"], "image"),
-        ("SD2", ["hyper-sd2"], "image"),
-        ("SSD", ["hyper-ssd"], "image"),
-        ("SDXL-turbo", ["hyper-sdxl-turbo"], "image"),
-        ("playground-v2.5", ["hyper-playground"], "image"),
-        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image"),
-        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image"),
-        # ("Fluently-XL-v4", ["hyper-fluently-xl-v4"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
-        # ("Fluently-XL-Final", ["hyper-fluently-xl-final"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
-        # ("PixArt-Sigma-XL-2-1024-MS", ["hyper-pixart"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
-        # ("dreamshaper-xl-lightning", ["hyper-dreamshaper"], "image"), # Error: Error 400 from Hyperbolic API: {"object":"error","message":"Runtime Error: We would fix it asap.","code":404}
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect"], "chat"),
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat"),
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat"),
-        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "completion"),
-        ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion"),
-        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat"),
-        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat"),
-        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat"),
-        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat"),
-        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat"),
-        ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], "chat"),
-        ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat"),
+        ("FLUX.1-dev", ["hyper-flux"], "image", False),
+        ("SDXL1.0-base", ["hyper-sdxl"], "image", False),
+        ("SD1.5", ["hyper-sd15"], "image", False),
+        ("SD2", ["hyper-sd2"], "image", False),
+        ("SSD", ["hyper-ssd"], "image", False),
+        ("SDXL-turbo", ["hyper-sdxl-turbo"], "image", False),
+        ("playground-v2.5", ["hyper-playground"], "image", False),
+        ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image", False),
+        ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image", False),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect"], "chat", False),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec"], "chat", False),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect-rec-tc"], "chat", False),
+        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "completion", False),
+        ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "completion", False),
+        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "chat", False),
+        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], "chat", False),
+        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], "chat", False),
+        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], "chat", False),
+        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], "chat", False),
+        ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], "chat", True),
+        ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], "chat", True),
+        ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
     ]
 
 
-
 class HyperbolicImage(llm.Model):
+
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     can_stream = False
@@ -210,15 +207,21 @@ class HyperbolicImage(llm.Model):
         result = self.execute(llm_prompt, stream=stream, response=response)
         return response
 
+
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     model_type = "chat"
+    conversation_contexts = {}  # Class variable to store contexts
+
+    class Options(llm.Options):
+        image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
 
     def __init__(self, model_id, **kwargs):
         aliases = kwargs.pop('aliases', [])
+        self.is_vision_model = kwargs.pop('is_vision_model', False)
         super().__init__(model_id, **kwargs)
-        self.api_base = "https://api.hyperbolic.xyz/v1/"
+        self.api_base = "https://api.hyperbolic.xyz/v1/chat/completions"
         self.system_prompt = None
         self.temperature = None
         self.top_p = None
@@ -234,72 +237,98 @@ class HyperbolicChat(Chat):
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
-        current_system = None
+        encoded_image = None
+        image_sent = False
+
         if conversation is not None:
+            context = self.get_conversation_context(conversation)
+            image_sent = context.get('image_sent', False)
             for prev_response in conversation.responses:
-                if prev_response.prompt.system and prev_response.prompt.system != current_system:
-                    messages.append({"role": "system", "content": prev_response.prompt.system})
-                    current_system = prev_response.prompt.system
+                if prev_response.prompt.options.image and encoded_image is None:
+                    encoded_image = self.encode_image(prev_response.prompt.options.image)
                 messages.append({"role": "user", "content": prev_response.prompt.prompt})
                 messages.append({"role": "assistant", "content": prev_response.text()})
 
-        if prompt.system and prompt.system != current_system:
-            messages.append({"role": "system", "content": prompt.system})
-            current_system = prompt.system
-        elif self.system_prompt and self.system_prompt != current_system:
-            messages.append({"role": "system", "content": self.system_prompt})
-            current_system = self.system_prompt
+        if prompt.options.image:
+            if not self.is_vision_model:
+                print(f"Warning: The model '{self.model_id}' does not support image input. Continuing without the image.")
+                prompt.options.image = None
+            elif encoded_image is None:
+                encoded_image = self.encode_image(prompt.options.image)
 
-        user_message = prompt.prompt
-        if "hyper-reflect-rec-tc" in self.aliases:
-            user_message += " Think carefully."
+        if self.is_vision_model and encoded_image and not image_sent:
+            user_message = [
+                {"type": "text", "text": prompt.prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}}
+            ]
+            image_sent = True
+        else:
+            user_message = prompt.prompt
 
         messages.append({"role": "user", "content": user_message})
 
-        if any(alias.startswith("hyper-reflect") for alias in self.aliases):
-            messages.append({"role": "assistant", "content": "<thinking>\n"})
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.get_key()}"
+        }
 
-        response._prompt_json = {"messages": messages}
-        kwargs = self.build_kwargs(prompt)
+        data = {
+            "model": self.model_name or self.model_id,
+            "messages": messages,
+            "stream": stream,
+        }
 
-        temperature = prompt.temperature if hasattr(prompt, 'temperature') else self.temperature
-        top_p = prompt.top_p if hasattr(prompt, 'top_p') else self.top_p
+        if hasattr(prompt, 'temperature') and prompt.temperature is not None:
+            data["temperature"] = prompt.temperature
+        elif self.temperature is not None:
+            data["temperature"] = self.temperature
 
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-        if top_p is not None:
-            kwargs["top_p"] = top_p
+        if hasattr(prompt, 'top_p') and prompt.top_p is not None:
+            data["top_p"] = prompt.top_p
+        elif self.top_p is not None:
+            data["top_p"] = self.top_p
 
-        client = self.get_client()
+        response._prompt_json = data
 
-        retries = 3
-        delay = 5  # seconds
+        try:
+            api_response = requests.post(self.api_base, headers=headers, json=data, stream=stream)
+            api_response.raise_for_status()
 
-        for attempt in range(retries):
-            try:
-                completion = client.chat.completions.create(
-                    model=self.model_name or self.model_id,
-                    messages=messages,
-                    stream=stream,
-                    **kwargs,
-                )
+            if stream:
+                for line in api_response.iter_lines():
+                    if line:
+                        chunk = json.loads(line.decode('utf-8').split('data: ')[1])
+                        content = chunk['choices'][0]['delta'].get('content')
+                        if content:
+                            yield content
+            else:
+                response_json = api_response.json()
+                content = response_json['choices'][0]['message']['content']
+                yield content
 
-                for chunk in completion:
-                    content = chunk.choices[0].delta.content
-                    if content is not None:
-                        yield content
+            response.response_json = {"content": "".join(response._chunks)}
 
-                response.response_json = {"content": "".join(response._chunks)}
-                break  # Exit the retry loop if successful
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 401:
-                    print(f"Authentication error (401). Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    raise  # Re-raise the exception if it's not a 401 error
-            except Exception as e:
-                print(f"An error occurred: {str(e)}")
-                raise
+        except requests.RequestException as e:
+            print(f"An error occurred: {str(e)}")
+            raise
+
+        if conversation is not None:
+            self.set_conversation_context(conversation, {'image_sent': image_sent})
+
+    @staticmethod
+    def encode_image(image_path):
+        with Image.open(image_path) as img:
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    @classmethod
+    def get_conversation_context(cls, conversation):
+        return cls.conversation_contexts.get(id(conversation), {'image_sent': False})
+
+    @classmethod
+    def set_conversation_context(cls, conversation, context):
+        cls.conversation_contexts[id(conversation)] = context
 
 class HyperbolicCompletion(Completion):
     needs_key = "hyperbolic"
@@ -366,9 +395,9 @@ def register_models(register):
     if not key:
         return
     models_with_aliases = get_model_ids_with_aliases()
-    for model_id, aliases, model_type in models_with_aliases:
+    for model_id, aliases, model_type, is_vision_model in models_with_aliases:
         if model_type == "chat":
-            model_instance = HyperbolicChat(model_id=model_id, aliases=aliases)
+            model_instance = HyperbolicChat(model_id=model_id, aliases=aliases, is_vision_model=is_vision_model)
         elif model_type == "completion":
             model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
         elif model_type == "image":
