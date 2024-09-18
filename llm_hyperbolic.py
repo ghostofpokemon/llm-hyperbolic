@@ -181,10 +181,12 @@ class HyperbolicImage(Model):
         result = self.execute(llm_prompt, stream=stream, response=response)
         return response
 
+
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     model_type = "chat"
+    conversation_contexts = {}  # Class variable to store contexts
 
     class Options(llm.Options):
         image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
@@ -296,13 +298,11 @@ class HyperbolicChat(Chat):
 
     @classmethod
     def get_conversation_context(cls, conversation):
-        return {
-            'image_sent': conversation.metadata.get('image_sent', False)
-        }
+        return cls.conversation_contexts.get(id(conversation), {'image_sent': False})
 
     @classmethod
     def set_conversation_context(cls, conversation, context):
-        conversation.metadata['image_sent'] = context.get('image_sent', False)
+        cls.conversation_contexts[id(conversation)] = context
 
 class HyperbolicCompletion(Completion):
     needs_key = "hyperbolic"
