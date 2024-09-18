@@ -41,8 +41,8 @@ def get_model_ids_with_aliases():
     ]
 
 
-class HyperbolicImage(llm.Model):
 
+class HyperbolicImage(llm.Model):
     needs_key = "hyperbolic"
     key_env_var = "LLM_HYPERBOLIC_KEY"
     can_stream = False
@@ -85,13 +85,11 @@ class HyperbolicImage(llm.Model):
             img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.get_key()}"
         }
-
         data = {
             "model_name": self.model_id,
             "prompt": prompt.prompt,
@@ -99,13 +97,11 @@ class HyperbolicImage(llm.Model):
             "width": prompt.options.width,
             "backend": prompt.options.backend,
         }
-
         optional_params = [
             "prompt_2", "negative_prompt", "negative_prompt_2", "image", "strength",
             "seed", "cfg_scale", "sampler", "steps", "style_preset", "enable_refiner",
             "controlnet_name", "controlnet_image", "loras"
         ]
-
         for param in optional_params:
             value = getattr(prompt.options, param)
             if value is not None:
@@ -113,15 +109,11 @@ class HyperbolicImage(llm.Model):
                     data[param] = self.encode_image(value)
                 else:
                     data[param] = value
-
         response._prompt_json = data
-
         retries = 3
         delay = 15  # seconds
-
         for attempt in range(retries):
             api_response = requests.post(self.api_base, headers=headers, json=data)
-
             if api_response.status_code == 200:
                 response.response_json = api_response.json()
                 break  # Exit the retry loop if successful
@@ -133,61 +125,75 @@ class HyperbolicImage(llm.Model):
                 delay *= 2  # Exponential backoff
             else:
                 error_data = json.loads(api_response.text)
-                if "style_preset" in error_data.get("message", ""):
-                    available_presets = error_data["message"].split("Available style_preset: ")[-1].strip("[]").replace("'", "").split(", ")
-                    print(f"Error: The style preset you provided is not supported.")
-                    chosen_preset = input(f"Please choose one from the available styles: {tuple(available_presets)}: ").strip()
-                    if chosen_preset in available_presets:
-                        prompt.options.style_preset = chosen_preset
+                error_message = error_data.get("message", "")
+                param_error_keys = {
+                    "style_preset": "style_preset",
+                    "controlnet_name": "controlnet",
+                    "sampler": "sampler",
+                    "loras": "lora"
+                }
+                for param, error_key in param_error_keys.items():
+                    if error_key in error_message.lower():
+                        print(f"Error: The {param} you provided is not supported.")
+                        # Extract available options if present in the error message
+                        available_options = None
+                        if "Available" in error_message:
+                            options_str = error_message.split("Available")[1].split(":")[1].strip()
+                            try:
+                                available_options = eval(options_str)  # This should parse the list string into a Python list
+                            except:
+                                pass  # If parsing fails, we'll fall back to not showing options
+                        if available_options:
+                            print(f"Please choose one from the available options: {tuple(available_options)}")
+                            new_value = input(f"Enter a valid {param}: ").strip()
+                            while new_value not in available_options:
+                                print(f"Invalid option. Please choose from: {tuple(available_options)}")
+                                new_value = input(f"Enter a valid {param}: ").strip()
+                        else:
+                            new_value = input(f"Please enter a valid {param}: ").strip()
+                        if param == "loras":
+                            # For loras, we need to handle it as a dictionary
+                            lora_weight = float(input(f"Please enter the weight for the LoRA '{new_value}' (0-1): ").strip())
+                            setattr(prompt.options, param, {new_value: lora_weight})
+                        else:
+                            setattr(prompt.options, param, new_value)
                         return self.execute(prompt, stream, response, conversation)
-                    else:
-                        return "Invalid style preset chosen. Please try again with a valid preset."
-                else:
-                    raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
+                # If we get here, it's an error we haven't specifically handled
+                raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 
         if 'images' in response.response_json and response.response_json['images']:
             base64_image = response.response_json['images'][0]['image']
             image_data = base64.b64decode(base64_image)
-
             prompt_part = "".join(c for c in prompt.prompt[:30] if c.isalnum() or c in (' ', '_')).rstrip()
             prompt_part = prompt_part.replace(' ', '_')
-
             options_part = []
             important_options = ['strength', 'cfg_scale', 'steps', 'seed']
             for key in important_options:
                 value = getattr(prompt.options, key)
                 if value is not None:
                     options_part.append(f"{key}-{value}")
-
             if prompt.options.image:
                 options_part.append("img2img")
             if prompt.options.controlnet_name:
                 options_part.append(f"controlnet-{prompt.options.controlnet_name}")
             if prompt.options.loras:
                 options_part.append("lora")
-
             options_string = "_".join(options_part)
-
             base_filename = f"{prompt_part}_{self.model_id}"
             if options_string:
                 base_filename += f"_{options_string}"
-
             counter = 1
             while True:
                 if counter == 1:
                     filename = f"{base_filename}.png"
                 else:
                     filename = f"{base_filename}_{counter}.png"
-
                 if not os.path.exists(filename):
                     break
                 counter += 1
-
             with open(filename, "wb") as f:
                 f.write(image_data)
-
             response._text = f"Image saved as: {filename}"
-
             try:
                 subprocess.run(["imgcat", filename], check=True)
             except subprocess.CalledProcessError:
@@ -196,7 +202,6 @@ class HyperbolicImage(llm.Model):
                 response._text += "\nimgcat not found. Please install it to display images in the terminal."
         else:
             response._text = "No image data received from the API"
-
         return response._text
 
     def prompt(self, prompt, *args, **kwargs):
@@ -206,7 +211,6 @@ class HyperbolicImage(llm.Model):
         response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
         result = self.execute(llm_prompt, stream=stream, response=response)
         return response
-
 
 class HyperbolicChat(Chat):
     needs_key = "hyperbolic"
