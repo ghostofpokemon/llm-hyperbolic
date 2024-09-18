@@ -13,6 +13,7 @@ from io import BytesIO
 from PIL import Image
 import os
 import subprocess
+import re
 
 def get_model_ids_with_aliases():
     return [
@@ -109,9 +110,15 @@ class HyperbolicImage(llm.Model):
                     data[param] = self.encode_image(value)
                 else:
                     data[param] = value
+
+        if 'loras' in data:
+            print("Warning: The API may silently accept invalid LoRAs. Please ensure you're using a valid LoRA name.")
+            print("If the resulting image doesn't reflect the expected LoRA effect, the specified LoRA might not exist.")
+
         response._prompt_json = data
         retries = 3
         delay = 15  # seconds
+
         for attempt in range(retries):
             api_response = requests.post(self.api_base, headers=headers, json=data)
             if api_response.status_code == 200:
@@ -126,24 +133,34 @@ class HyperbolicImage(llm.Model):
             else:
                 error_data = json.loads(api_response.text)
                 error_message = error_data.get("message", "")
+
+                # Handle ControlNet error
+                if "Unexpected controlnet_name" in error_message:
+                    available_controlnets = re.findall(r"\['(.+?)'\]", error_message)
+                    if available_controlnets:
+                        available_controlnets = available_controlnets[0].split("', '")
+                        print(f"Error: The controlnet_name you provided is not supported.")
+                        print(f"Available ControlNet options: {tuple(available_controlnets)}")
+                        new_controlnet = input("Please enter a valid controlnet_name: ").strip()
+                        while new_controlnet not in available_controlnets:
+                            print(f"Invalid option. Please choose from: {tuple(available_controlnets)}")
+                            new_controlnet = input("Enter a valid controlnet_name: ").strip()
+                        setattr(prompt.options, 'controlnet_name', new_controlnet)
+                        return self.execute(prompt, stream, response, conversation)
+
+                # Handle other parameter errors
                 param_error_keys = {
                     "style_preset": "style_preset",
-                    "controlnet_name": "controlnet",
                     "sampler": "sampler",
-                    "loras": "lora"
                 }
+
                 for param, error_key in param_error_keys.items():
                     if error_key in error_message.lower():
                         print(f"Error: The {param} you provided is not supported.")
-                        # Extract available options if present in the error message
-                        available_options = None
-                        if "Available" in error_message:
-                            options_str = error_message.split("Available")[1].split(":")[1].strip()
-                            try:
-                                available_options = eval(options_str)  # This should parse the list string into a Python list
-                            except:
-                                pass  # If parsing fails, we'll fall back to not showing options
+                        available_options = re.findall(r"\[(.+?)\]", error_message)
                         if available_options:
+                            available_options = available_options[0].split(", ")
+                            available_options = [opt.strip("'") for opt in available_options]
                             print(f"Please choose one from the available options: {tuple(available_options)}")
                             new_value = input(f"Enter a valid {param}: ").strip()
                             while new_value not in available_options:
@@ -151,13 +168,9 @@ class HyperbolicImage(llm.Model):
                                 new_value = input(f"Enter a valid {param}: ").strip()
                         else:
                             new_value = input(f"Please enter a valid {param}: ").strip()
-                        if param == "loras":
-                            # For loras, we need to handle it as a dictionary
-                            lora_weight = float(input(f"Please enter the weight for the LoRA '{new_value}' (0-1): ").strip())
-                            setattr(prompt.options, param, {new_value: lora_weight})
-                        else:
-                            setattr(prompt.options, param, new_value)
+                        setattr(prompt.options, param, new_value)
                         return self.execute(prompt, stream, response, conversation)
+
                 # If we get here, it's an error we haven't specifically handled
                 raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 

@@ -34,6 +34,33 @@ llm "What would happen if you mixed a banana with a pineapple and the essence of
 llm -m hyper-reflect-rec-tc "How many Rs in strawberry, and why is it a metaphor for the fleeting nature of existence?"
 ```
 
+## Vision Models
+We've added support for vision models that can analyze and describe images. Try these out:
+
+```bash
+llm "What's written in the image?" -m hyper-qwen -o image ~/path/to/your/image.png
+llm "Describe this image in detail" -m hyper-pixtral -o image ~/another/image.jpg
+```
+
+These models can be used in chat mode, allowing for follow-up questions about the image:
+
+```bash
+llm -m hyper-qwen -o image ~/path/to/your/image.png
+# Then in the chat:
+> Analyze this image
+# (The model will describe the image)
+> What colors are most prominent?
+# (The model will answer based on the previously analyzed image)
+```
+
+Note: In chat mode, the image is only sent with the first user message in a conversation. Subsequent messages can refer back to this initially provided image without needing to send it again. This allows for a series of follow-up questions about the same image.
+
+Available vision models:
+- `hyper-qwen`: Qwen-VL model for visual understanding and generation
+- `hyper-pixtral`: Pixtral model for detailed image analysis and description
+
+These models excel at tasks like OCR (Optical Character Recognition), object detection, scene description, and answering questions about visual content.
+
 ## Image Generation
 
 Because why stop at text? Try these:
