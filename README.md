@@ -34,6 +34,76 @@ llm "What would happen if you mixed a banana with a pineapple and the essence of
 llm -m hyper-reflect-rec-tc "How many Rs in strawberry, and why is it a metaphor for the fleeting nature of existence?"
 ```
 
+
+### Text-to-Speech (TTS) in Chat Mode and Direct Use
+
+You can use the `!tts` command to convert the last response from a chat session into speech. Additionally, you can directly use the `hyper-tts` model to convert any text input into speech.
+
+#### Using `!tts` in Chat Mode
+
+1. **Start a Chat Session**: Begin a chat session with any Hyperbolic model.
+2. **Use the `!tts` Command**: After receiving a response, type `!tts` to convert it to speech.
+
+##### Example
+
+```bash
+llm -m hyper-chat
+```
+
+In the chat session:
+
+```
+> What is posthuman AI consciousness like?
+The concept of posthuman AI consciousness involves the idea of artificial intelligence that surpasses human cognitive capabilities and potentially even human consciousness itself. It raises questions about the nature of consciousness, the possibility of self-aware machines, and the ethical implications of such advanced AI.
+> !tts
+```
+
+This will play back the last response as audio.
+
+#### Directly Using `hyper-tts` for Text-to-Speech
+
+You can directly use the `hyper-tts` model to convert any text input into speech.
+
+##### Example
+
+To convert a single text input to speech:
+
+```bash
+llm "take a shot\!" -m hyper-tts
+```
+
+This will generate and play back an audio file with the text "take a shot!".
+
+To start a chat session with the `hyper-tts` model:
+
+```bash
+llm chat -m hyper-tts
+```
+
+In the chat session:
+
+```
+Chatting with TTS
+Type 'exit' or 'quit' to exit
+Type '!multi' to enter multiple lines, then '!end' to finish
+> This is your computer speaking
+Audio saved as: tts_output_1727044892.wav
+```
+
+This will play back the input text "This is your computer speaking" as audio.
+
+#### Options
+
+- **Speed**: Control the speed of the speech using the `speed` option (default: `1.0`, range: `0.5` to `2.0`).
+
+##### Example with Speed Option
+
+```bash
+llm "animate the rubber chickens, NOW" -m hyper-tts -o speed 1.8
+```
+
+This will play the audio at a faster speed.
+
 ## Vision Models
 We've added support for vision models that can analyze and describe images. Try these out:
 

@@ -1,7 +1,6 @@
 import requests
 from typing import Optional, Dict
 import time
-import httpx
 import llm
 from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
@@ -14,7 +13,6 @@ from PIL import Image
 import os
 import subprocess
 import re
-import asyncio
 import threading
 import time
 
@@ -45,8 +43,8 @@ def get_model_ids_with_aliases():
         ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], "chat", True),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
         ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], "chat", True),
-        ("TTS", ["hyper-tts"], "tts", False),    ]
-
+        ("TTS", ["hyper-tts"], "tts", False),
+    ]
 
 class HyperbolicTTS(llm.Model):
     needs_key = "hyperbolic"
@@ -110,7 +108,6 @@ class HyperbolicTTS(llm.Model):
                 print("\nafplay not found. Please install it to play audio in the terminal.")
             finally:
                 self.audio_playing = False  # Reset the flag after playing
-
 
     def prompt(self, prompt, *args, **kwargs):
         stream = kwargs.pop('stream', False)
@@ -345,7 +342,6 @@ class HyperbolicChat(Chat):
             yield response._text
             return
 
-
         messages = []
         encoded_image = None
         image_sent = False
@@ -428,7 +424,6 @@ class HyperbolicChat(Chat):
 
         if conversation is not None:
             self.set_conversation_context(conversation, {'image_sent': image_sent})
-
 
     @staticmethod
     def encode_image(image_path):
