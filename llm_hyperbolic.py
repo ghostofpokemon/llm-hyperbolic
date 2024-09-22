@@ -40,7 +40,8 @@ def get_model_ids_with_aliases():
         ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], "chat", True),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
         ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], "chat", True),
-        ("TTS", ["hyper-tts"], "tts", False),    ]
+        ("TTS", ["hyper-tts"], "tts", False),
+    ]
 
 class HyperbolicTTS(llm.Model):
     needs_key = "hyperbolic"
