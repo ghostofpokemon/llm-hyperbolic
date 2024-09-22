@@ -40,9 +40,69 @@ def get_model_ids_with_aliases():
         ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], "chat", True),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
         ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], "chat", True),
-    ]
+        ("TTS", ["hyper-tts"], "tts", False),    ]
 
+class HyperbolicTTS(llm.Model):
+    needs_key = "hyperbolic"
+    key_env_var = "LLM_HYPERBOLIC_KEY"
+    can_stream = False
+    model_type = "tts"
 
+    class Options(llm.Options):
+        speed: float = Field(default=1.0, description="Speed of speech (0.5 to 2.0)")
+
+    def __init__(self, model_id, **kwargs):
+        self.model_id = model_id.replace("hyperbolic/", "")
+        self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
+        self.aliases = kwargs.pop('aliases', [])
+
+    def __str__(self):
+        return f"Hyperbolic TTS: hyperbolic/{self.model_id}"
+
+    def execute(self, prompt, stream, response, conversation=None):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.get_key()}"
+        }
+        data = {
+            "text": prompt.prompt,
+            "speed": prompt.options.speed
+        }
+
+        response._prompt_json = data
+        api_response = requests.post(self.api_base, headers=headers, json=data)
+
+        if api_response.status_code == 200:
+            response_json = api_response.json()
+            audio_data = base64.b64decode(response_json["audio"])
+
+            # Save the audio file
+            filename = f"tts_output_{int(time.time())}.wav"
+            with open(filename, "wb") as f:
+                f.write(audio_data)
+
+            response._text = f"Audio saved as: {filename}"
+            response.response_json = response_json
+
+            # Try to play the audio if possible
+            try:
+                subprocess.run(["afplay", filename], check=True)
+            except subprocess.CalledProcessError:
+                response._text += "\nUnable to play audio with afplay. Please check if it's installed."
+            except FileNotFoundError:
+                response._text += "\nafplay not found. Please install it to play audio in the terminal."
+        else:
+            raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
+
+        return response._text
+
+    def prompt(self, prompt, *args, **kwargs):
+        stream = kwargs.pop('stream', False)
+        options = self.Options(**kwargs)
+        llm_prompt = llm.Prompt(prompt, model=self, options=options)
+        response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
+        result = self.execute(llm_prompt, stream=stream, response=response)
+        return response
 
 class HyperbolicImage(llm.Model):
     needs_key = "hyperbolic"
@@ -421,6 +481,8 @@ def register_models(register):
         elif model_type == "image":
             model_instance = HyperbolicImage(model_id=model_id)
             model_instance.aliases = aliases
+        elif model_type == "tts":
+            model_instance = HyperbolicTTS(model_id=model_id, aliases=aliases)
         else:
             continue  # Skip unknown model types
 

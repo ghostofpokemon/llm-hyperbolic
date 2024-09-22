@@ -11,6 +11,9 @@ __pycache__/
 *.webp
 *.jpg
 
+#audio
+*.wav
+
 .DS_Store
 
 # Distribution / packaging
