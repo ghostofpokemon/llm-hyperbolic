@@ -14,11 +14,11 @@ from PIL import Image
 import os
 import subprocess
 import re
-import threading
 import asyncio
+import threading
+import time
 
 audio_lock = threading.Lock()
-current_process = None
 
 def get_model_ids_with_aliases():
     return [
@@ -46,6 +46,7 @@ def get_model_ids_with_aliases():
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
         ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], "chat", True),
         ("TTS", ["hyper-tts"], "tts", False),    ]
+
 
 class HyperbolicTTS(llm.Model):
     needs_key = "hyperbolic"
@@ -90,20 +91,26 @@ class HyperbolicTTS(llm.Model):
             response._text = f"Audio saved as: {filename}"
             response.response_json = response_json
 
-            # Play audio asynchronously
-            threading.Thread(target=self.play_audio, args=(filename,), daemon=True).start()
+            # Play audio asynchronously, but only if it's not already playing
+            if not self.audio_playing:
+                self.audio_playing = True
+                threading.Thread(target=self.play_audio, args=(filename,), daemon=True).start()
         else:
             raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 
         return response._text
 
     def play_audio(self, filename):
-        try:
-            subprocess.run(["afplay", filename], check=True)
-        except subprocess.CalledProcessError:
-            print("\nUnable to play audio with afplay. Please check if it's installed.")
-        except FileNotFoundError:
-            print("\nafplay not found. Please install it to play audio in the terminal.")
+        with audio_lock:  # Use the lock to ensure only one audio plays at a time
+            try:
+                subprocess.run(["afplay", filename], check=True)
+            except subprocess.CalledProcessError:
+                print("\nUnable to play audio with afplay. Please check if it's installed.")
+            except FileNotFoundError:
+                print("\nafplay not found. Please install it to play audio in the terminal.")
+            finally:
+                self.audio_playing = False  # Reset the flag after playing
+
 
     def prompt(self, prompt, *args, **kwargs):
         stream = kwargs.pop('stream', False)
@@ -112,7 +119,6 @@ class HyperbolicTTS(llm.Model):
         response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
         result = self.execute(llm_prompt, stream=stream, response=response)
         return response
-
 
 class HyperbolicImage(llm.Model):
     needs_key = "hyperbolic"
@@ -324,14 +330,21 @@ class HyperbolicChat(Chat):
     def __str__(self):
         return f"Hyperbolic: hyperbolic/{self.model_id}"
 
+    def handle_tts_command(self, response):
+        if self.last_response:
+            tts_model = HyperbolicTTS("TTS")
+            tts_response = tts_model.prompt(self.last_response)
+            return tts_response.text()
+        else:
+            return "No previous response to convert to speech."
+
     def execute(self, prompt, stream, response, conversation=None):
-        print(f"Debug: Received prompt: '{prompt.prompt}'")
         if prompt.prompt.strip() == "!tts":
-            print("Debug: !tts command detected")
             tts_response = self.handle_tts_command(response)
             response._text = tts_response
             yield response._text
             return
+
 
         messages = []
         encoded_image = None
@@ -407,7 +420,6 @@ class HyperbolicChat(Chat):
                 yield content
 
             self.last_response = full_response  # Store the last response
-            print(f"Debug: Updated last_response: {self.last_response[:50]}...")  # Print first 50 chars
             response.response_json = {"content": full_response}
 
         except requests.RequestException as e:
@@ -417,16 +429,6 @@ class HyperbolicChat(Chat):
         if conversation is not None:
             self.set_conversation_context(conversation, {'image_sent': image_sent})
 
-    def handle_tts_command(self, response):
-        print("Debug: Entered handle_tts_command method")
-        if self.last_response:
-            print(f"Debug: Last response found: {self.last_response[:50]}...")
-            tts_model = HyperbolicTTS("TTS")
-            tts_response = tts_model.prompt(self.last_response)
-            return tts_response.text()
-        else:
-            print("Debug: No last response found")
-            return "No previous response to convert to speech."
 
     @staticmethod
     def encode_image(image_path):
