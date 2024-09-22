@@ -1,7 +1,6 @@
 import requests
 from typing import Optional, Dict
 import time
-import httpx
 import llm
 from llm import Model
 from llm.default_plugins.openai_models import Chat, Completion
@@ -14,6 +13,10 @@ from PIL import Image
 import os
 import subprocess
 import re
+import threading
+import time
+
+audio_lock = threading.Lock()
 
 def get_model_ids_with_aliases():
     return [
@@ -56,6 +59,7 @@ class HyperbolicTTS(llm.Model):
         self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
         self.aliases = kwargs.pop('aliases', [])
+        self.audio_playing = False  # Flag to ensure audio is only played once
 
     def __str__(self):
         return f"Hyperbolic TTS: hyperbolic/{self.model_id}"
@@ -85,17 +89,25 @@ class HyperbolicTTS(llm.Model):
             response._text = f"Audio saved as: {filename}"
             response.response_json = response_json
 
-            # Try to play the audio if possible
-            try:
-                subprocess.run(["afplay", filename], check=True)
-            except subprocess.CalledProcessError:
-                response._text += "\nUnable to play audio with afplay. Please check if it's installed."
-            except FileNotFoundError:
-                response._text += "\nafplay not found. Please install it to play audio in the terminal."
+            # Play audio asynchronously, but only if it's not already playing
+            if not self.audio_playing:
+                self.audio_playing = True
+                threading.Thread(target=self.play_audio, args=(filename,), daemon=True).start()
         else:
             raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 
         return response._text
+
+    def play_audio(self, filename):
+        with audio_lock:  # Use the lock to ensure only one audio plays at a time
+            try:
+                subprocess.run(["afplay", filename], check=True)
+            except subprocess.CalledProcessError:
+                print("\nUnable to play audio with afplay. Please check if it's installed.")
+            except FileNotFoundError:
+                print("\nafplay not found. Please install it to play audio in the terminal.")
+            finally:
+                self.audio_playing = False  # Reset the flag after playing
 
     def prompt(self, prompt, *args, **kwargs):
         stream = kwargs.pop('stream', False)
@@ -305,6 +317,7 @@ class HyperbolicChat(Chat):
         self.temperature = None
         self.top_p = None
         self.aliases = aliases
+        self.last_response = None
 
         if any(alias.endswith("-rec") or alias.endswith("-rec-tc") for alias in self.aliases):
             self.system_prompt = "You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags."
@@ -314,7 +327,21 @@ class HyperbolicChat(Chat):
     def __str__(self):
         return f"Hyperbolic: hyperbolic/{self.model_id}"
 
+    def handle_tts_command(self, response):
+        if self.last_response:
+            tts_model = HyperbolicTTS("TTS")
+            tts_response = tts_model.prompt(self.last_response)
+            return tts_response.text()
+        else:
+            return "No previous response to convert to speech."
+
     def execute(self, prompt, stream, response, conversation=None):
+        if prompt.prompt.strip() == "!tts":
+            tts_response = self.handle_tts_command(response)
+            response._text = tts_response
+            yield response._text
+            return
+
         messages = []
         encoded_image = None
         image_sent = False
@@ -373,19 +400,23 @@ class HyperbolicChat(Chat):
             api_response = requests.post(self.api_base, headers=headers, json=data, stream=stream)
             api_response.raise_for_status()
 
+            full_response = ""
             if stream:
                 for line in api_response.iter_lines():
                     if line:
                         chunk = json.loads(line.decode('utf-8').split('data: ')[1])
                         content = chunk['choices'][0]['delta'].get('content')
                         if content:
+                            full_response += content
                             yield content
             else:
                 response_json = api_response.json()
                 content = response_json['choices'][0]['message']['content']
+                full_response = content
                 yield content
 
-            response.response_json = {"content": "".join(response._chunks)}
+            self.last_response = full_response  # Store the last response
+            response.response_json = {"content": full_response}
 
         except requests.RequestException as e:
             print(f"An error occurred: {str(e)}")
@@ -477,6 +508,7 @@ def register_models(register):
     for model_id, aliases, model_type, is_vision_model in models_with_aliases:
         if model_type == "chat":
             model_instance = HyperbolicChat(model_id=model_id, aliases=aliases, is_vision_model=is_vision_model)
+            model_instance.execute = model_instance.execute  # Ensure it uses the correct execute method
         elif model_type == "completion":
             model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
         elif model_type == "image":
