@@ -3,7 +3,7 @@ from typing import Optional, Dict
 import time
 import llm
 from llm import Model
-from llm.default_plugins.openai_models import Chat, Completion
+from llm.default_plugins.openai_models import Chat, Completion, SharedOptions
 import click
 from pydantic import Field, Extra
 import json
@@ -305,7 +305,7 @@ class HyperbolicChat(Chat):
     model_type = "chat"
     conversation_contexts = {}  # Class variable to store contexts
 
-    class Options(llm.Options):
+    class Options(SharedOptions):
         image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
 
     def __init__(self, model_id, **kwargs):
