@@ -6,10 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
-#images
+#media
 *.png
 *.webp
 *.jpg
+
+*.wav
 
 .DS_Store
 

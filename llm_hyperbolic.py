@@ -1,10 +1,9 @@
 import requests
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Any
 import time
-import httpx
 import llm
 from llm import Model
-from llm.default_plugins.openai_models import Chat, Completion
+from llm.default_plugins.openai_models import Chat, Completion, SharedOptions
 import click
 from pydantic import Field, Extra
 import json
@@ -14,38 +13,15 @@ from PIL import Image
 import os
 import subprocess
 import re
+import threading
+import time
 from pathlib import Path
+import httpx
 
-# Define the DownloadError exception
-class DownloadError(Exception):
-    pass
+audio_lock = threading.Lock()
 
-# Dictionary to store model aliases
-MODEL_ALIASES = {
-    "FLUX.1-dev": ["hyper-flux"],
-    "SDXL1.0-base": ["hyper-sdxl"],
-    "SD1.5": ["hyper-sd15"],
-    "SD2": ["hyper-sd2"],
-    "SSD": ["hyper-ssd"],
-    "SDXL-turbo": ["hyper-sdxl-turbo"],
-    "playground-v2.5": ["hyper-playground"],
-    "SD1.5-ControlNet": ["hyper-sd15-controlnet"],
-    "SDXL-ControlNet": ["hyper-sdxl-controlnet"],
-    "mattshumer/Reflection-Llama-3.1-70B": ["hyper-reflect", "hyper-reflect-rec", "hyper-reflect-rec-tc"],
-    "meta-llama/Meta-Llama-3.1-405B-FP8": ["hyper-base-fp8"],
-    "meta-llama/Meta-Llama-3.1-405B": ["hyper-base"],
-    "meta-llama/Meta-Llama-3.1-405B-Instruct": ["hyper-chat"],
-    "NousResearch/Hermes-3-Llama-3.1-70B": ["hyper-hermes-70"],
-    "meta-llama/Meta-Llama-3.1-70B-Instruct": ["hyper-llama-70"],
-    "meta-llama/Meta-Llama-3.1-8B-Instruct": ["hyper-llama-8"],
-    "meta-llama/Meta-Llama-3-70B-Instruct": ["hyper-llama-3-70"],
-    "Qwen/Qwen2-VL-7B-Instruct": ["hyper-qwen"],
-    "mistralai/Pixtral-12B-2409": ["hyper-pixtral"],
-    "deepseek-ai/DeepSeek-V2.5": ["hyper-seek"],
-}
-
-# Function to fetch models from the /models endpoint
-def fetch_cached_json(url: str, path: Path, cache_timeout: int, api_key: str) -> Dict:
+# Function to fetch and cache JSON response from the given URL
+def fetch_cached_json(url: str, path: Path, cache_timeout: int) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file():
         mod_time = path.stat().st_mtime
@@ -53,35 +29,29 @@ def fetch_cached_json(url: str, path: Path, cache_timeout: int, api_key: str) ->
             with open(path, "r") as file:
                 return json.load(file)
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
     try:
-        response = httpx.get(url, headers=headers, follow_redirects=True)
+        response = httpx.get(url, follow_redirects=True)
         response.raise_for_status()
         with open(path, "w") as file:
             json.dump(response.json(), file)
         return response.json()
-    except httpx.HTTPError as e:
+    except httpx.HTTPError:
         if path.is_file():
             with open(path, "r") as file:
                 return json.load(file)
-        raise DownloadError(f"Failed to download data and no cache is available at {path}") from e
+        else:
+            raise Exception(f"Failed to download data and no cache is available at {path}")
 
-def get_hyperbolic_models(api_key: str) -> List[Dict]:
-    try:
-        return fetch_cached_json(
-            url="https://api.hyperbolic.xyz/v1/models",
-            path=llm.user_dir() / "hyperbolic_models.json",
-            cache_timeout=3600,
-            api_key=api_key
-        )["data"]
-    except DownloadError as e:
-        print(f"Error fetching models: {e}")
-        return []
+# Function to get hyperbolic models from the API
+def get_hyperbolic_models() -> dict:
+    return fetch_cached_json(
+        url="https://api.hyperbolic.xyz/v1/models",
+        path=llm.user_dir() / "hyperbolic_models.json",
+        cache_timeout=3600,
+    )["data"]
 
-def get_model_ids_with_aliases() -> List[Tuple[str, List[str], str, bool]]:
+
+def get_model_ids_with_aliases():
     return [
         ("FLUX.1-dev", ["hyper-flux"], "image", False),
         ("SDXL1.0-base", ["hyper-sdxl"], "image", False),
@@ -105,7 +75,82 @@ def get_model_ids_with_aliases() -> List[Tuple[str, List[str], str, bool]]:
         ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], "chat", True),
         ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], "chat", True),
         ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], "chat", False),
+        # ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], "chat", False),
+        ("meta-llama/Llama-3.2-3B-Instruct", ["hyper-llama-3.2-3b"], "chat", False),
+        ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hyper-llama-3.2-90"], "chat", True),
+        ("TTS", ["hyper-tts"], "tts", False),
     ]
+
+class HyperbolicTTS(llm.Model):
+    needs_key = "hyperbolic"
+    key_env_var = "LLM_HYPERBOLIC_KEY"
+    can_stream = False
+    model_type = "tts"
+
+    class Options(llm.Options):
+        speed: float = Field(default=1.0, description="Speed of speech (0.5 to 2.0)")
+
+    def __init__(self, model_id, **kwargs):
+        self.model_id = model_id.replace("hyperbolic/", "")
+        self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
+        self.aliases = kwargs.pop('aliases', [])
+        self.audio_playing = False  # Flag to ensure audio is only played once
+
+    def __str__(self):
+        return f"Hyperbolic TTS: hyperbolic/{self.model_id}"
+
+    def execute(self, prompt, stream, response, conversation=None):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.get_key()}"
+        }
+        data = {
+            "text": prompt.prompt,
+            "speed": prompt.options.speed
+        }
+
+        response._prompt_json = data
+        api_response = requests.post(self.api_base, headers=headers, json=data)
+
+        if api_response.status_code == 200:
+            response_json = api_response.json()
+            audio_data = base64.b64decode(response_json["audio"])
+
+            # Save the audio file
+            filename = f"tts_output_{int(time.time())}.wav"
+            with open(filename, "wb") as f:
+                f.write(audio_data)
+
+            response._text = f"Audio saved as: {filename}"
+            response.response_json = response_json
+
+            # Play audio asynchronously, but only if it's not already playing
+            if not self.audio_playing:
+                self.audio_playing = True
+                threading.Thread(target=self.play_audio, args=(filename,), daemon=True).start()
+        else:
+            raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
+
+        return response._text
+
+    def play_audio(self, filename):
+        with audio_lock:  # Use the lock to ensure only one audio plays at a time
+            try:
+                subprocess.run(["afplay", filename], check=True)
+            except subprocess.CalledProcessError:
+                print("\nUnable to play audio with afplay. Please check if it's installed.")
+            except FileNotFoundError:
+                print("\nafplay not found. Please install it to play audio in the terminal.")
+            finally:
+                self.audio_playing = False  # Reset the flag after playing
+
+    def prompt(self, prompt, *args, **kwargs):
+        stream = kwargs.pop('stream', False)
+        options = self.Options(**kwargs)
+        llm_prompt = llm.Prompt(prompt, model=self, options=options)
+        response = llm.Response(model=self, prompt=llm_prompt, stream=stream)
+        result = self.execute(llm_prompt, stream=stream, response=response)
+        return response
 
 class HyperbolicImage(llm.Model):
     needs_key = "hyperbolic"
@@ -136,15 +181,15 @@ class HyperbolicImage(llm.Model):
             extra = Extra.allow
             protected_namespaces = ()
 
-    def __init__(self, model_id: str, **kwargs):
-        self.model_id = model_id
+    def __init__(self, model_id, **kwargs):
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
     def __str__(self):
-        return f"Hyperbolic: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
 
-    def encode_image(self, image_path: str) -> str:
+    def encode_image(self, image_path):
         with Image.open(image_path) as img:
             buffered = BytesIO()
             img.save(buffered, format="PNG")
@@ -156,7 +201,7 @@ class HyperbolicImage(llm.Model):
             "Authorization": f"Bearer {self.get_key()}"
         }
         data = {
-            "model_name": self.model_id.replace("hyperbolic/", ""),
+            "model_name": self.model_id,
             "prompt": prompt.prompt,
             "height": prompt.options.height,
             "width": prompt.options.width,
@@ -182,6 +227,7 @@ class HyperbolicImage(llm.Model):
         response._prompt_json = data
         retries = 3
         delay = 15  # seconds
+
         for attempt in range(retries):
             api_response = requests.post(self.api_base, headers=headers, json=data)
             if api_response.status_code == 200:
@@ -196,6 +242,7 @@ class HyperbolicImage(llm.Model):
             else:
                 error_data = json.loads(api_response.text)
                 error_message = error_data.get("message", "")
+
                 # Handle ControlNet error
                 if "Unexpected controlnet_name" in error_message:
                     available_controlnets = re.findall(r"\['(.+?)'\]", error_message)
@@ -209,11 +256,13 @@ class HyperbolicImage(llm.Model):
                             new_controlnet = input("Enter a valid controlnet_name: ").strip()
                         setattr(prompt.options, 'controlnet_name', new_controlnet)
                         return self.execute(prompt, stream, response, conversation)
+
                 # Handle other parameter errors
                 param_error_keys = {
                     "style_preset": "style_preset",
                     "sampler": "sampler",
                 }
+
                 for param, error_key in param_error_keys.items():
                     if error_key in error_message.lower():
                         print(f"Error: The {param} you provided is not supported.")
@@ -230,6 +279,7 @@ class HyperbolicImage(llm.Model):
                             new_value = input(f"Please enter a valid {param}: ").strip()
                         setattr(prompt.options, param, new_value)
                         return self.execute(prompt, stream, response, conversation)
+
                 # If we get here, it's an error we haven't specifically handled
                 raise Exception(f"Error {api_response.status_code} from Hyperbolic API: {api_response.text}")
 
@@ -251,7 +301,7 @@ class HyperbolicImage(llm.Model):
             if prompt.options.loras:
                 options_part.append("lora")
             options_string = "_".join(options_part)
-            base_filename = f"{prompt_part}_{self.model_id.replace('hyperbolic/', '')}"
+            base_filename = f"{prompt_part}_{self.model_id}"
             if options_string:
                 base_filename += f"_{options_string}"
             counter = 1
@@ -290,10 +340,10 @@ class HyperbolicChat(Chat):
     model_type = "chat"
     conversation_contexts = {}  # Class variable to store contexts
 
-    class Options(llm.Options):
+    class Options(SharedOptions):
         image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
 
-    def __init__(self, model_id: str, **kwargs):
+    def __init__(self, model_id, **kwargs):
         aliases = kwargs.pop('aliases', [])
         self.is_vision_model = kwargs.pop('is_vision_model', False)
         super().__init__(model_id, **kwargs)
@@ -302,19 +352,35 @@ class HyperbolicChat(Chat):
         self.temperature = None
         self.top_p = None
         self.aliases = aliases
-        self.model_name = model_id.replace("hyperbolic/", "")
+        self.last_response = None
+
         if any(alias.endswith("-rec") or alias.endswith("-rec-tc") for alias in self.aliases):
             self.system_prompt = "You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags."
             self.temperature = 0.7
             self.top_p = 0.95
 
     def __str__(self):
-        return f"Hyperbolic: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
+
+    def handle_tts_command(self, response):
+        if self.last_response:
+            tts_model = HyperbolicTTS("TTS")
+            tts_response = tts_model.prompt(self.last_response)
+            return tts_response.text()
+        else:
+            return "No previous response to convert to speech."
 
     def execute(self, prompt, stream, response, conversation=None):
+        if prompt.prompt.strip() == "!tts":
+            tts_response = self.handle_tts_command(response)
+            response._text = tts_response
+            yield response._text
+            return
+
         messages = []
         encoded_image = None
         image_sent = False
+
         if conversation is not None:
             context = self.get_conversation_context(conversation)
             image_sent = context.get('image_sent', False)
@@ -323,12 +389,14 @@ class HyperbolicChat(Chat):
                     encoded_image = self.encode_image(prev_response.prompt.options.image)
                 messages.append({"role": "user", "content": prev_response.prompt.prompt})
                 messages.append({"role": "assistant", "content": prev_response.text()})
+
         if prompt.options.image:
             if not self.is_vision_model:
                 print(f"Warning: The model '{self.model_id}' does not support image input. Continuing without the image.")
                 prompt.options.image = None
             elif encoded_image is None:
                 encoded_image = self.encode_image(prompt.options.image)
+
         if self.is_vision_model and encoded_image and not image_sent:
             user_message = [
                 {"type": "text", "text": prompt.prompt},
@@ -337,48 +405,63 @@ class HyperbolicChat(Chat):
             image_sent = True
         else:
             user_message = prompt.prompt
+
         messages.append({"role": "user", "content": user_message})
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.get_key()}"
         }
+
         data = {
-            "model": self.model_name,
+            "model": self.model_name or self.model_id,
             "messages": messages,
             "stream": stream,
         }
+
         if hasattr(prompt, 'temperature') and prompt.temperature is not None:
             data["temperature"] = prompt.temperature
         elif self.temperature is not None:
             data["temperature"] = self.temperature
+
         if hasattr(prompt, 'top_p') and prompt.top_p is not None:
             data["top_p"] = prompt.top_p
         elif self.top_p is not None:
             data["top_p"] = self.top_p
+
         response._prompt_json = data
+
         try:
             api_response = requests.post(self.api_base, headers=headers, json=data, stream=stream)
             api_response.raise_for_status()
+
+            full_response = ""
             if stream:
                 for line in api_response.iter_lines():
                     if line:
                         chunk = json.loads(line.decode('utf-8').split('data: ')[1])
                         content = chunk['choices'][0]['delta'].get('content')
                         if content:
+                            full_response += content
                             yield content
             else:
                 response_json = api_response.json()
                 content = response_json['choices'][0]['message']['content']
+                full_response = content
                 yield content
-            response.response_json = {"content": "".join(response._chunks)}
+
+            self.last_response = full_response  # Store the last response
+            response.response_json = {"content": full_response}
+
         except requests.RequestException as e:
             print(f"An error occurred: {str(e)}")
             raise
+
         if conversation is not None:
             self.set_conversation_context(conversation, {'image_sent': image_sent})
 
     @staticmethod
-    def encode_image(image_path: str) -> str:
+    def encode_image(image_path):
         with Image.open(image_path) as img:
             buffered = BytesIO()
             img.save(buffered, format="PNG")
@@ -397,15 +480,14 @@ class HyperbolicCompletion(Completion):
     key_env_var = "LLM_HYPERBOLIC_KEY"
     model_type = "completion"
 
-    def __init__(self, model_id: str, **kwargs):
+    def __init__(self, model_id, **kwargs):
         aliases = kwargs.pop('aliases', [])
         super().__init__(model_id, **kwargs)
         self.api_base = "https://api.hyperbolic.xyz/v1/"
         self.aliases = aliases
-        self.model_name = model_id.replace("hyperbolic/", "")
 
     def __str__(self):
-        return f"Hyperbolic: {self.model_id}"
+        return f"Hyperbolic: hyperbolic/{self.model_id}"
 
     def execute(self, prompt, stream, response, conversation=None):
         messages = []
@@ -414,26 +496,32 @@ class HyperbolicCompletion(Completion):
                 messages.append(prev_response.prompt.prompt)
                 messages.append(prev_response.text())
         messages.append(prompt.prompt)
+
         if prompt.system:
             messages.insert(0, prompt.system)
+
         full_prompt = "\n".join(messages)
         response._prompt_json = {"prompt": full_prompt}
         kwargs = self.build_kwargs(prompt)
         client = self.get_client()
+
         retries = 3
         delay = 5  # seconds
+
         for attempt in range(retries):
             try:
                 completion = client.completions.create(
-                    model=self.model_name,
+                    model=self.model_name or self.model_id,
                     prompt=full_prompt,
                     stream=True,
                     **kwargs,
                 )
+
                 for chunk in completion:
                     text = chunk.choices[0].text
                     if text:
                         yield text
+
                 response.response_json = {"content": "".join(response._chunks)}
                 break  # Exit the retry loop if successful
             except httpx.HTTPStatusError as e:
@@ -446,81 +534,55 @@ class HyperbolicCompletion(Completion):
                 print(f"An error occurred: {str(e)}")
                 raise
 
+
 @llm.hookimpl
 def register_models(register):
     key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
     if not key:
         return
 
-    hardcoded_info = {model_id: (aliases, model_type, is_vision_model)
-                      for model_id, aliases, model_type, is_vision_model in get_model_ids_with_aliases()}
+    # Get existing models with aliases
+    models_with_aliases = get_model_ids_with_aliases()
+    existing_model_ids = {model_id for model_id, *_ in models_with_aliases}
 
-    api_models = get_hyperbolic_models(api_key=key)
-
-    for model_definition in api_models:
-        api_id = model_definition["id"]
-
-        # Check if this model is in the hardcoded list
-        if api_id in hardcoded_info:
-            aliases, model_type, is_vision_model = hardcoded_info[api_id]
-        else:
-            aliases = []
-            model_type = "chat" if model_definition.get("supports_chat") else "image"
-            is_vision_model = model_definition.get("supports_image_input", False)
-
-        model_id = f"hyperbolic/{api_id}"
-
+    # Register existing models with aliases
+    for model_id, aliases, model_type, is_vision_model in models_with_aliases:
         if model_type == "chat":
-            register(
-                HyperbolicChat(
-                    model_id=model_id,
-                    model_name=api_id,
-                    is_vision_model=is_vision_model
-                ),
-                aliases=aliases
-            )
+            model_instance = HyperbolicChat(model_id=model_id, aliases=aliases, is_vision_model=is_vision_model)
         elif model_type == "completion":
-            register(
-                HyperbolicCompletion(
-                    model_id=model_id,
-                    model_name=api_id,
-                ),
-                aliases=aliases
-            )
+            model_instance = HyperbolicCompletion(model_id=model_id, aliases=aliases)
         elif model_type == "image":
-            register(
-                HyperbolicImage(
-                    model_id=model_id,
-                ),
-                aliases=aliases
-            )
+            model_instance = HyperbolicImage(model_id=model_id, aliases=aliases)
+        elif model_type == "tts":
+            model_instance = HyperbolicTTS(model_id=model_id, aliases=aliases)
+        else:
+            continue  # Skip unknown model types
+        register(model_instance, aliases=aliases)
 
-    # Register any remaining hardcoded models that weren't in the API response
-    api_ids = set(m["id"] for m in api_models)
-    for hc_id, (aliases, model_type, is_vision_model) in hardcoded_info.items():
-        if hc_id not in api_ids:
-            model_id = f"hyperbolic/{hc_id}"
+    # Fetch dynamic models from the API
+    fetched_models = get_hyperbolic_models()
+
+    # Check for new models that are not in the existing model IDs
+    for model_definition in fetched_models:
+        model_id = model_definition["id"]
+        model_name = model_definition.get("name", model_id)  # Use the model's name or ID if not available
+
+        if model_id not in existing_model_ids:
+            # Determine model type; adjust based on your API structure
+            model_type = model_definition.get("type", "completion")  # Default to "completion" if not specified
+            aliases = model_definition.get("aliases", [])
+
+            # Create a new instance based on model type
             if model_type == "chat":
-                register(
-                    HyperbolicChat(
-                        model_id=model_id,
-                        model_name=hc_id,
-                        is_vision_model=is_vision_model
-                    ),
-                    aliases=aliases
-                )
+                model_instance = HyperbolicChat(model_id=f"hyperbolic/{model_id}", model_name=model_name, aliases=aliases)
             elif model_type == "completion":
-                register(
-                    HyperbolicCompletion(
-                        model_id=model_id,
-                        model_name=hc_id,
-                    ),
-                    aliases=aliases
-                )
+                model_instance = HyperbolicCompletion(model_id=f"hyperbolic/{model_id}", model_name=model_name, aliases=aliases)
             elif model_type == "image":
-                register(
-                    HyperbolicImage(
-                        model_id=model_id,
-                    ),
-                    aliases=aliases
-                )
+                model_instance = HyperbolicImage(model_id=f"hyperbolic/{model_id}", model_name=model_name, aliases=aliases)
+            elif model_type == "tts":
+                model_instance = HyperbolicTTS(model_id=f"hyperbolic/{model_id}", model_name=model_name, aliases=aliases)
+            else:
+                continue  # Skip unknown model types
+
+            # Register the dynamically fetched model
+            register(model_instance, aliases=aliases)
