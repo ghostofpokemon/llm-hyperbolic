@@ -96,7 +96,7 @@ class HyperbolicTTS(llm.Model):
         speed: float = Field(default=1.0, description="Speed of speech (0.5 to 2.0)")
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
         self.aliases = kwargs.pop('aliases', [])
         self.audio_playing = False  # Flag to ensure audio is only played once
@@ -187,7 +187,7 @@ class HyperbolicImage(llm.Model):
             protected_namespaces = ()
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
