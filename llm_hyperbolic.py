@@ -71,7 +71,6 @@ def get_model_ids_with_aliases():
         ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image", False),
         ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image", False),
         ("TTS", ["hyper-tts"], "tts", False),
-        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect", "hyper-reflect-rec", "hyper-reflect-rec-tc"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "text", False),
@@ -97,7 +96,7 @@ class HyperbolicTTS(llm.Model):
         speed: float = Field(default=1.0, description="Speed of speech (0.5 to 2.0)")
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id.replace("hyperbolic/", "")
+        self.model_id = model_id
         self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
         self.aliases = kwargs.pop('aliases', [])
         self.audio_playing = False  # Flag to ensure audio is only played once
@@ -188,7 +187,7 @@ class HyperbolicImage(llm.Model):
             protected_namespaces = ()
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id.replace("hyperbolic/", "")
+        self.model_id = model_id
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
@@ -571,7 +570,7 @@ def register_models(register):
             else:
                 model_type = "text"
 
-            is_vision_model = supports_image_input
+            is_vision_model = True
 
             register_model(register, model_id, [], model_type, is_vision_model)
 
