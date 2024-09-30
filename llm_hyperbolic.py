@@ -71,6 +71,7 @@ def get_model_ids_with_aliases():
         ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], "image", False),
         ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], "image", False),
         ("TTS", ["hyper-tts"], "tts", False),
+        ("mattshumer/Reflection-Llama-3.1-70B", ["hyper-reflect", "hyper-reflect-rec", "hyper-reflect-rec-tc"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], "text", False),
         ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], "text", False),
@@ -96,13 +97,13 @@ class HyperbolicTTS(llm.Model):
         speed: float = Field(default=1.0, description="Speed of speech (0.5 to 2.0)")
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/audio/generation"
         self.aliases = kwargs.pop('aliases', [])
         self.audio_playing = False  # Flag to ensure audio is only played once
 
     def __str__(self):
-        return f"HyperbolicTTS: {self.model_id}"
+        return f"Hyperbolic TTS: {self.model_id}"
 
     def execute(self, prompt, stream, response, conversation=None):
         headers = {
@@ -187,7 +188,7 @@ class HyperbolicImage(llm.Model):
             protected_namespaces = ()
 
     def __init__(self, model_id, **kwargs):
-        self.model_id = model_id
+        self.model_id = model_id.replace("hyperbolic/", "")
         self.api_base = "https://api.hyperbolic.xyz/v1/image/generation"
         self.aliases = kwargs.pop('aliases', [])
 
@@ -358,6 +359,11 @@ class HyperbolicChat(Chat):
         self.top_p = None
         self.aliases = aliases
         self.last_response = None
+
+        if any(alias.endswith("-rec") or alias.endswith("-rec-tc") for alias in self.aliases):
+            self.system_prompt = "You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags."
+            self.temperature = 0.7
+            self.top_p = 0.95
 
     def __str__(self):
         return f"Hyperbolic: {self.model_id}"
