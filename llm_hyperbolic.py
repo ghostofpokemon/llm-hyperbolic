@@ -83,21 +83,21 @@ def get_model_ids_with_aliases() -> List[Tuple[str, List[str], ModelType]]:
         ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], ModelType.IMAGE),
         ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], ModelType.IMAGE),
         ("TTS", ["hyper-tts"], ModelType.TTS),
-        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-base-fp8"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-405B", ["hyper-base"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-chat"], ModelType.TEXT),
-        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-hermes-70"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-llama-70"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-llama-8"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-llama-3-70"], ModelType.TEXT),
-        ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-qwen"], ModelType.VISION),
-        ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], ModelType.VISION),
-        ("deepseek-ai/DeepSeek-V2.5", ["hyper-seek"], ModelType.TEXT),
-        ("Qwen/Qwen2.5-72B-Instruct", ["hyper-qwen2.5"], ModelType.TEXT),
-        ("meta-llama/Llama-3.2-3B-Instruct", ["hyper-llama-3.2-3b"], ModelType.TEXT),
-        ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hyper-llama-3.2-90v"], ModelType.VISION),
-        ("meta-llama/Llama-3.2-90B-Vision", ["hyper-llama-3.2-90v"], ModelType.VISION),
-        ("Qwen/Qwen2-VL-72B-Instruct", ["hyper-qwen2v"], ModelType.VISION),
+        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hy-l3.1-405-fp8"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-405B", ["hy-l3.1-405"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hy-l3.1-405i"], ModelType.TEXT),
+        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hy-h3.1-70"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hy-l3.1-70i"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hy-l3.1-8i"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hy-l3-70i"], ModelType.TEXT),
+        ("mistralai/Pixtral-12B-2409", ["hy-pix"], ModelType.VISION),
+        ("deepseek-ai/DeepSeek-V2.5", ["hy-ds"], ModelType.TEXT),
+        ("Qwen/Qwen2-VL-7B-Instruct", ["hy-q2-7vi"], ModelType.VISION),
+        ("Qwen/Qwen2.5-72B-Instruct", ["hy-q2.5-72i"], ModelType.TEXT),
+        ("meta-llama/Llama-3.2-90B-Vision", ["hy-l3.2-90v"], ModelType.VISION),
+        ("Qwen/Qwen2-VL-72B-Instruct", ["hy-q2-72vi"], ModelType.VISION),
+        ("meta-llama/Llama-3.2-3B-Instruct", ["hy-l3.2-3i"], ModelType.TEXT),
+        ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hy-l3.2-90vi"], ModelType.VISION),
     ]
 
 class HyperbolicBase(Model):
@@ -605,7 +605,7 @@ def register_model(register, model_id: str, aliases: List[str], model_type: Mode
         register(chat_model, aliases=chat_aliases)
 
         # Register Completion Model
-        completion_aliases = [f"{alias}-completion" for alias in aliases]
+        completion_aliases = [f"{alias}-base" for alias in aliases]
         completion_model = HyperbolicCompletion(
             model_id=f"hyperboliccompletion/{model_id}",
             model_name=model_id,
