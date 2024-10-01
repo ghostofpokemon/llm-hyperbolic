@@ -406,12 +406,12 @@ class HyperbolicChat(Chat):
                 messages.append({"role": "assistant", "content": prev_response.text()})
 
         if prompt.options.image:
-            encoded_image = self.encode_image(prompt.options.image)
+                encoded_image = self.encode_image(prompt.options.image)
 
         if encoded_image and not image_sent:
             user_message = [
                 {"type": "text", "text": prompt.prompt},
-                {"type": "image_base64", "content": f"data:image/jpeg;base64,{encoded_image}"}
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}}
             ]
             image_sent = True
         else:
@@ -440,13 +440,11 @@ class HyperbolicChat(Chat):
             if stream:
                 for line in api_response.iter_lines():
                     if line:
-                        decoded_line = line.decode('utf-8')
-                        if decoded_line.startswith("data: "):
-                            chunk = json.loads(decoded_line.replace("data: ", ""))
-                            content = chunk['choices'][0]['delta'].get('content')
-                            if content:
-                                full_response += content
-                                yield content
+                        chunk = json.loads(line.decode('utf-8').split('data: ')[1])
+                        content = chunk['choices'][0]['delta'].get('content')
+                        if content:
+                            full_response += content
+                            yield content
             else:
                 response_json = api_response.json()
                 content = response_json['choices'][0]['message']['content']
@@ -456,6 +454,23 @@ class HyperbolicChat(Chat):
             self.last_response = full_response  # Store the last response
             response.response_json = {"content": full_response}
 
+        except requests.HTTPError as e:
+            print(f"An error occurred: {str(e)}")
+            if e.response.status_code == 422:
+                error_data = e.response.json()
+                error_message = error_data.get("message", "")
+                print(f"422 Unprocessable Entity: {error_message}")
+                if "required" in error_message:
+                    missing_fields = re.findall(r"'(.+?)'", error_message)
+                    print(f"Missing required fields: {missing_fields}")
+                elif "format" in error_message:
+                    invalid_fields = re.findall(r"'(.+?)'", error_message)
+                    print(f"Invalid format for fields: {invalid_fields}")
+                else:
+                    print(f"Error message: {error_message}")
+            else:
+                print(f"Error {e.response.status_code} from Hyperbolic API: {e.response.text}")
+
         except requests.RequestException as e:
             print(f"An error occurred: {str(e)}")
             raise
@@ -463,7 +478,8 @@ class HyperbolicChat(Chat):
         if conversation is not None:
             self.set_conversation_context(conversation, {'image_sent': image_sent})
 
-    def encode_image(self, image_path: str) -> str:
+    @staticmethod
+    def encode_image(image_path):
         with Image.open(image_path) as img:
             buffered = BytesIO()
             img.save(buffered, format="PNG")
@@ -476,6 +492,7 @@ class HyperbolicChat(Chat):
     @classmethod
     def set_conversation_context(cls, conversation, context):
         cls.conversation_contexts[id(conversation)] = context
+
 
 class HyperbolicCompletion(Completion):
     needs_key = "hyperbolic"
