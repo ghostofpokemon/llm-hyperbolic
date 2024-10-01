@@ -20,19 +20,6 @@ llm keys set hyperbolic
 # Paste key here
 ```
 
-Run `llm models` to list the models, and `llm models --options` to include a list of their options.
-
-Run prompts like this:
-```bash
-llm "What is posthuman AI consciousness like?" -m hyper-chat
-llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commune with alien neural net deities?"
-llm "Enlightenment in an alien-physics universe?" -m hyper-seek
-llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 1
-llm "Once upon a time, in a galaxy far, far away..." -m hyper-base-fp8
-llm -m hyper-reflect "Why do cats always land on their feet? Is it a conspiracy?"
-llm "What would happen if you mixed a banana with a pineapple and the essence of existential dread?" -m hyper-reflect-rec
-llm -m hyper-reflect-rec-tc "How many Rs in strawberry, and why is it a metaphor for the fleeting nature of existence?"
-```
 
 ## Vision Models
 We've added support for vision models that can analyze and describe images. Try these out:
