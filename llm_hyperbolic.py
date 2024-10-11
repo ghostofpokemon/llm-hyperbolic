@@ -613,29 +613,142 @@ def register_models(register):
         print("Hyperbolic API key not found. Skipping model registration.")
         return
 
+    # Excluded models
+    excluded_models = EXCLUDED_MODELS
+
     # Get existing models with aliases
     models_with_aliases = get_model_ids_with_aliases()
     existing_model_ids = {model_id for model_id, _, _ in models_with_aliases}
 
-    # Register existing models with aliases
+    # Initialize lists to hold models by type
+    chat_models = []
+    vision_models = []
+    image_models = []
+    completion_models = []
+    tts_models = []
+
+    # Collect models to register
     for model_id, aliases, model_type in models_with_aliases:
-        register_model(register, model_id, aliases, model_type)
+        if model_id in excluded_models:
+            continue  # Skip excluded models
+
+        if model_type == ModelType.TEXT:
+            # Prepare chat model
+            chat_aliases = [f"{alias}-chat" for alias in aliases]
+            chat_model = HyperbolicChat(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=chat_aliases,
+            )
+            chat_models.append((chat_model, chat_aliases))
+
+            # Prepare completion model
+            completion_aliases = [f"{alias}-base" for alias in aliases]
+            completion_model = HyperbolicCompletion(
+                model_id=f"hyperboliccompletion/{model_id}",
+                model_name=model_id,
+                aliases=completion_aliases,
+            )
+            completion_models.append((completion_model, completion_aliases))
+
+        elif model_type == ModelType.VISION:
+            # Prepare vision model
+            vision_model = HyperbolicChat(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=aliases,
+            )
+            vision_models.append((vision_model, aliases))
+
+        elif model_type == ModelType.IMAGE:
+            # Prepare image model
+            image_model = HyperbolicImage(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=aliases,
+            )
+            image_models.append((image_model, aliases))
+
+        elif model_type == ModelType.TTS:
+            # Prepare TTS model
+            tts_model = HyperbolicTTS(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=aliases,
+            )
+            tts_models.append((tts_model, aliases))
 
     # Fetch dynamic models from the API
     fetched_models = get_hyperbolic_models()
 
-    # Define excluded models
-    excluded_models = EXCLUDED_MODELS
-
-    # Check for new models that are not in the existing model IDs and not excluded
+    # Collect dynamic models
     for model_definition in fetched_models:
         model_id = model_definition["id"]
-        if model_id in excluded_models:
-            continue  # Skip excluded models
-        if model_id not in existing_model_ids:
-            # Determine model type based on naming conventions or API attributes
-            model_type = determine_model_type(model_definition)
-            register_model(register, model_id, [], model_type)
+        if model_id in existing_model_ids or model_id in excluded_models:
+            continue  # Skip already registered or excluded models
+
+        model_type = determine_model_type(model_definition)
+
+        if model_type == ModelType.TEXT:
+            # Prepare chat model
+            chat_model = HyperbolicChat(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=[],
+            )
+            chat_models.append((chat_model, []))
+
+            # Prepare completion model
+            completion_model = HyperbolicCompletion(
+                model_id=f"hyperboliccompletion/{model_id}",
+                model_name=model_id,
+                aliases=[],
+            )
+            completion_models.append((completion_model, []))
+
+        elif model_type == ModelType.VISION:
+            # Prepare vision model
+            vision_model = HyperbolicChat(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=[],
+            )
+            vision_models.append((vision_model, []))
+
+        elif model_type == ModelType.IMAGE:
+            # Prepare image model
+            image_model = HyperbolicImage(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=[],
+            )
+            image_models.append((image_model, []))
+
+        elif model_type == ModelType.TTS:
+            # Prepare TTS model
+            tts_model = HyperbolicTTS(
+                model_id=f"hyperbolic/{model_id}",
+                model_name=model_id,
+                aliases=[],
+            )
+            tts_models.append((tts_model, []))
+
+    # Register models in the desired order
+    for model, aliases in chat_models:
+        register(model, aliases=aliases)
+
+    for model, aliases in vision_models:
+        register(model, aliases=aliases)
+
+    for model, aliases in image_models:
+        register(model, aliases=aliases)
+
+    for model, aliases in completion_models:
+        register(model, aliases=aliases)
+
+    for model, aliases in tts_models:
+        register(model, aliases=aliases)
+
 
 def determine_model_type(model_definition: Dict[str, Any]) -> ModelType:
     model_id = model_definition.get("id", "")
@@ -647,66 +760,7 @@ def determine_model_type(model_definition: Dict[str, Any]) -> ModelType:
     else:
         if model_definition.get("supports_chat", False):
             return ModelType.TEXT
-        elif model_definition.get("supports_image_input", True):  # Assuming vision models support image input
+        elif model_definition.get("supports_image_input", True):
             return ModelType.VISION
         else:
             return ModelType.TEXT  # Default to TEXT if uncertain
-
-def register_model(register, model_id: str, aliases: List[str], model_type: ModelType):
-    api_bases = {
-        ModelType.TEXT: "https://api.hyperbolic.xyz/v1/chat/completions",
-        ModelType.IMAGE: "https://api.hyperbolic.xyz/v1/image/generation",
-        ModelType.VISION: "https://api.hyperbolic.xyz/v1/chat/completions",  # Assuming vision uses chat endpoint
-        ModelType.TTS: "https://api.hyperbolic.xyz/v1/audio/generation",
-    }
-
-    if model_type == ModelType.TEXT:
-        # Register Chat Model
-        chat_aliases = [f"{alias}-chat" for alias in aliases]
-        chat_model = HyperbolicChat(
-            model_id=f"hyperbolic/{model_id}",
-            model_name=model_id,
-            aliases=chat_aliases,
-            api_base=api_bases[model_type],
-        )
-        register(chat_model, aliases=chat_aliases)
-
-        # Register Completion Model
-        completion_aliases = [f"{alias}-base" for alias in aliases]
-        completion_model = HyperbolicCompletion(
-            model_id=f"hyperboliccompletion/{model_id}",
-            model_name=model_id,
-            aliases=completion_aliases,
-            api_base="https://api.hyperbolic.xyz/v1/completions",
-        )
-        register(completion_model, aliases=completion_aliases)
-
-    elif model_type == ModelType.VISION:
-        # Register Vision Model as Chat model (assuming Vision uses Chat endpoint)
-        vision_model = HyperbolicChat(
-            model_id=f"hyperbolic/{model_id}",
-            model_name=model_id,
-            aliases=aliases,
-            api_base=api_bases[model_type],
-        )
-        register(vision_model, aliases=aliases)
-
-    elif model_type == ModelType.IMAGE:
-        # Register Image Generation Model
-        image_model = HyperbolicImage(
-            model_id=f"hyperbolic/{model_id}",
-            model_name=model_id,
-            aliases=aliases,
-            api_base=api_bases[model_type],
-        )
-        register(image_model, aliases=aliases)
-
-    elif model_type == ModelType.TTS:
-        # Register TTS Model
-        tts_model = HyperbolicTTS(
-            model_id=f"hyperbolic/{model_id}",
-            model_name=model_id,
-            aliases=aliases,
-            api_base=api_bases[model_type],
-        )
-        register(tts_model, aliases=aliases)
