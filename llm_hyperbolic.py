@@ -83,21 +83,23 @@ def get_model_ids_with_aliases() -> List[Tuple[str, List[str], ModelType]]:
         ("SD1.5-ControlNet", ["hyper-sd15-controlnet"], ModelType.IMAGE),
         ("SDXL-ControlNet", ["hyper-sdxl-controlnet"], ModelType.IMAGE),
         ("TTS", ["hyper-tts"], ModelType.TTS),
-        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hy-l3.1-405-fp8"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-405B", ["hy-l3.1-405"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hy-l3.1-405i"], ModelType.TEXT),
-        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hy-h3.1-70"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hy-l3.1-70i"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hy-l3.1-8i"], ModelType.TEXT),
-        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hy-l3-70i"], ModelType.TEXT),
-        ("mistralai/Pixtral-12B-2409", ["hy-pix"], ModelType.VISION),
-        ("deepseek-ai/DeepSeek-V2.5", ["hy-ds"], ModelType.TEXT),
-        ("Qwen/Qwen2-VL-7B-Instruct", ["hy-q2-7vi"], ModelType.VISION),
-        ("Qwen/Qwen2.5-72B-Instruct", ["hy-q2.5-72i"], ModelType.TEXT),
-        ("meta-llama/Llama-3.2-90B-Vision", ["hy-l3.2-90v"], ModelType.VISION),
-        ("Qwen/Qwen2-VL-72B-Instruct", ["hy-q2-72vi"], ModelType.VISION),
-        ("meta-llama/Llama-3.2-3B-Instruct", ["hy-l3.2-3i"], ModelType.TEXT),
-        ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hy-l3.2-90vi"], ModelType.VISION),
+        ("meta-llama/Meta-Llama-3.1-405B-FP8", ["hyper-l405-fp8"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-405B", ["hyper-l405"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-405B-Instruct", ["hyper-l405i"], ModelType.TEXT),
+        ("NousResearch/Hermes-3-Llama-3.1-70B", ["hyper-h70"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-70B-Instruct", ["hyper-l70i"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3.1-8B-Instruct", ["hyper-l8i"], ModelType.TEXT),
+        ("meta-llama/Meta-Llama-3-70B-Instruct", ["hyper-l70i"], ModelType.TEXT),
+        ("mistralai/Pixtral-12B-2409", ["hyper-pixtral"], ModelType.VISION),
+        ("deepseek-ai/DeepSeek-V2.5", ["hyper-ds"], ModelType.TEXT),
+        ("Qwen/Qwen2-VL-7B-Instruct", ["hyper-q7vi"], ModelType.VISION),
+        ("Qwen/Qwen2.5-72B-Instruct", ["hyper-q72i"], ModelType.TEXT),
+        ("meta-llama/Llama-3.2-90B-Vision", ["hyper-l90v"], ModelType.VISION),
+        ("Qwen/Qwen2-VL-72B-Instruct", ["hyper-q72vi"], ModelType.VISION),
+        ("meta-llama/Llama-3.2-3B-Instruct", ["hyper-l3i"], ModelType.TEXT),
+        ("Qwen2.5-Coder-32B-Instruct", ["hyper-qcode32i"], ModelType.TEXT),
+        ("meta-llama/Llama-3.1-70B-Instruct-FP8", ["hyper-l70i"], ModelType.TEXT),
+        ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hyper-l90vi"], ModelType.VISION),
     ]
 
 class HyperbolicBase(Model):
@@ -380,6 +382,7 @@ class HyperbolicChat(Chat):
 
     class Options(SharedOptions):
         image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
+        top_k: Optional[int] = Field(default=None, description="Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.")
 
     def __init__(self, model_id: str, **kwargs):
         aliases = kwargs.pop('aliases', [])
@@ -457,16 +460,20 @@ class HyperbolicChat(Chat):
             if stream:
                 for line in api_response.iter_lines():
                     if line:
-                        chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                        content = chunk['choices'][0]['delta'].get('content')
-                        if content:
-                            full_response += content
-                            yield content
-            else:
-                response_json = api_response.json()
-                content = response_json['choices'][0]['message']['content']
-                full_response = content
-                yield content
+                        try:
+                            line_text = line.decode('utf-8')
+                            if line_text.startswith('data: '):
+                                line_text = line_text[6:]  # Remove 'data: ' prefix
+                                if line_text.strip() == '[DONE]':
+                                    break
+                                chunk = json.loads(line_text)
+                                content = chunk['choices'][0]['delta'].get('content')
+                                if content:
+                                    full_response += content
+                                    yield content
+                        except json.JSONDecodeError:
+                            print(f"Warning: Could not parse line: {line_text}")
+                            continue
 
             self.last_response = full_response  # Store the last response
             response.response_json = {"content": full_response}
@@ -518,6 +525,7 @@ class HyperbolicCompletion(Completion):
 
     class Options(SharedOptions):
         image: Optional[str] = Field(default=None, description="Path to an image file for vision models")
+        top_k: Optional[int] = Field(default=None, description="Integer that controls the number of top tokens to consider. Set to -1 to consider all tokens.")
 
     def __init__(self, model_id: str, **kwargs):
         aliases = kwargs.pop('aliases', [])
@@ -584,14 +592,19 @@ class HyperbolicCompletion(Completion):
                 if stream:
                     for line in api_response.iter_lines():
                         if line:
-                            chunk = json.loads(line.decode('utf-8').split('data: ')[1])
-                            text = chunk['choices'][0]['text']
-                            if text:
-                                yield text
-                else:
-                    response_json = api_response.json()
-                    text = response_json['choices'][0]['text']
-                    yield text
+                            try:
+                                line_text = line.decode('utf-8')
+                                if line_text.startswith('data: '):
+                                    line_text = line_text[6:]  # Remove 'data: ' prefix
+                                    if line_text.strip() == '[DONE]':
+                                        break
+                                    chunk = json.loads(line_text)
+                                    text = chunk['choices'][0].get('text')
+                                    if text:
+                                        yield text
+                            except json.JSONDecodeError:
+                                print(f"Warning: Could not parse line: {line_text}")
+                                continue
 
                 response.response_json = {"content": "".join(response._chunks)}
                 break  # Exit the retry loop if successful
@@ -634,7 +647,7 @@ def register_models(register):
 
         if model_type == ModelType.TEXT:
             # Prepare chat model
-            chat_aliases = [f"{alias}-chat" for alias in aliases]
+            chat_aliases = [f"{alias}" for alias in aliases]
             chat_model = HyperbolicChat(
                 model_id=f"hyperbolic/{model_id}",
                 model_name=model_id,
@@ -643,7 +656,7 @@ def register_models(register):
             chat_models.append((chat_model, chat_aliases))
 
             # Prepare completion model
-            completion_aliases = [f"{alias}-base" for alias in aliases]
+            completion_aliases = [f"{alias}" for alias in aliases]
             completion_model = HyperbolicCompletion(
                 model_id=f"hyperboliccompletion/{model_id}",
                 model_name=model_id,
