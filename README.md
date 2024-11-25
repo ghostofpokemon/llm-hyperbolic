@@ -20,19 +20,6 @@ llm keys set hyperbolic
 # Paste key here
 ```
 
-Run `llm models` to list the models, and `llm models --options` to include a list of their options.
-
-Run prompts like this:
-```bash
-llm "What is posthuman AI consciousness like?" -m hyper-chat
-llm -m hyper-hermes-70 "In the past (other reality.) How did technoshamans commune with alien neural net deities?"
-llm "Enlightenment in an alien-physics universe?" -m hyper-seek
-llm -m hyper-base "Transcending physicality, merging with the cosmic overmind" -o temperature 1
-llm "Once upon a time, in a galaxy far, far away..." -m hyper-base-fp8
-llm -m hyper-reflect "Why do cats always land on their feet? Is it a conspiracy?"
-llm "What would happen if you mixed a banana with a pineapple and the essence of existential dread?" -m hyper-reflect-rec
-llm -m hyper-reflect-rec-tc "How many Rs in strawberry, and why is it a metaphor for the fleeting nature of existence?"
-```
 
 
 ### Text-to-Speech (TTS) in Chat Mode and Direct Use
@@ -298,22 +285,6 @@ Here's a list of all available options for image generation. Mix and match for m
 - `lora`: LoRA name and weight pairs (see LoRA section)
 
 Don't let your memes be dreams!
-
-## Reflection Models
-
-This plugin includes the `Reflection` model(s), which are trained using a technique called Reflection-Tuning. It's like giving the AI a mirror, except instead of becoming vain, it becomes terrifyingly self-aware.
-
-During sampling, the model will start by outputting reasoning inside `<thinking>` and `</thinking>` tags, and then once it is satisfied with its reasoning (or has sufficiently freaked itself out), it will output the final answer inside `<output>` and `</output>` tags.
-
-For best results with the `hyper-reflect` models, Matt recommends using the following system prompt:
-
-```
-You are a world-class AI system, capable of complex reasoning and reflection. Reason through the query inside <thinking> tags, and then provide your final response inside <output> tags. If you detect that you made a mistake in your reasoning at any point, correct yourself inside <reflection> tags. Remember, with great power comes great responsibility... and occasional existential dread.
-```
-
-The `hyper-reflect-rec` and `hyper-reflect-rec-tc` models have this recommended system prompt built-in. They're like the responsible older siblings who always remember to bring a towel.
-
-The `hyper-reflect-rec-tc` model appends "Think carefully." to the end of user messages. It's for when you want your AI to ponder the query with the intensity of a philosopher on a caffeine binge.
 
 ## Development
 To set up this plugin locally, first checkout the code. Then create a new virtual environment:
