@@ -97,7 +97,7 @@ def get_model_ids_with_aliases() -> List[Tuple[str, List[str], ModelType]]:
         ("meta-llama/Llama-3.2-90B-Vision", ["hyper-l90v"], ModelType.VISION),
         ("Qwen/Qwen2-VL-72B-Instruct", ["hyper-q72vi"], ModelType.VISION),
         ("meta-llama/Llama-3.2-3B-Instruct", ["hyper-l3i"], ModelType.TEXT),
-        ("Qwen2.5-Coder-32B-Instruct", ["hyper-qcode32i"], ModelType.TEXT),
+        ("Qwen/Qwen2.5-Coder-32B-Instruct", ["hyper-qcode-32i"], ModelType.TEXT),
         ("meta-llama/Llama-3.1-70B-Instruct-FP8", ["hyper-l70i"], ModelType.TEXT),
         ("meta-llama/Llama-3.2-90B-Vision-Instruct", ["hyper-l90vi"], ModelType.VISION),
     ]
@@ -656,7 +656,7 @@ def register_models(register):
             chat_models.append((chat_model, chat_aliases))
 
             # Prepare completion model
-            completion_aliases = [f"{alias}" for alias in aliases]
+            completion_aliases = [f"{alias}-base" for alias in aliases]
             completion_model = HyperbolicCompletion(
                 model_id=f"hyperboliccompletion/{model_id}",
                 model_name=model_id,
