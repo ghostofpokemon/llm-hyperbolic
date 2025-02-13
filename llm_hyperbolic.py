@@ -517,6 +517,11 @@ class HyperbolicChat(Chat):
     def set_conversation_context(cls, conversation, context):
         cls.conversation_contexts[id(conversation)] = context
 
+    def build_kwargs(self, prompt):
+    # Return any additional kwargs needed for the API call
+        return {}
+
+
 
 class HyperbolicCompletion(Completion):
     needs_key = "hyperbolic"
@@ -618,6 +623,10 @@ class HyperbolicCompletion(Completion):
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
                 raise
+
+    def build_kwargs(self, prompt):
+        # Return any additional kwargs needed for the API call
+        return {}
 
 @llm.hookimpl
 def register_models(register):
