@@ -141,7 +141,7 @@ class HyperbolicTTS(Model):
     def __str__(self):
         return f"Hyperbolic: {self.model_id}"
 
-    def execute(self, prompt, stream, response, conversation=None):
+    def execute(self, prompt, stream, response, conversation=None, key=None):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.get_key()}"
@@ -237,7 +237,7 @@ class HyperbolicImage(Model):
             img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    def execute(self, prompt, stream, response, conversation=None):
+    def execute(self, prompt, stream, response, conversation=None, key=None):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.get_key()}"
@@ -405,7 +405,7 @@ class HyperbolicChat(Chat):
         else:
             return "No previous response to convert to speech."
 
-    def execute(self, prompt, stream, response, conversation=None):
+    def execute(self, prompt, stream, response, conversation=None, key=None):
         if prompt.prompt.strip() == "!tts":
             tts_response = self.handle_tts_command(response)
             response._text = tts_response
@@ -518,8 +518,11 @@ class HyperbolicChat(Chat):
         cls.conversation_contexts[id(conversation)] = context
 
     def build_kwargs(self, prompt):
-    # Return any additional kwargs needed for the API call
-        return {}
+        # Return any additional kwargs needed for the API call
+        kwargs = {}
+        # Add any other parameters you need here
+        return kwargs
+
 
 
 
@@ -550,7 +553,7 @@ class HyperbolicCompletion(Completion):
             img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    def execute(self, prompt, stream, response, conversation=None):
+    def execute(self, prompt, stream, response, conversation=None, key=None):
         messages = []
         if conversation is not None:
             for prev_response in conversation.responses:
@@ -626,7 +629,10 @@ class HyperbolicCompletion(Completion):
 
     def build_kwargs(self, prompt):
         # Return any additional kwargs needed for the API call
-        return {}
+        kwargs = {}
+        # Add any other parameters you need here
+        return kwargs
+
 
 @llm.hookimpl
 def register_models(register):
