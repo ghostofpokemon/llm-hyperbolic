@@ -29,3 +29,7 @@ hyperbolic = "llm_hyperbolic"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-httpx"]
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
