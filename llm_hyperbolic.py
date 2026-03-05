@@ -29,7 +29,7 @@ class ModelType(Enum):
 # List of models to exclude from registration
 EXCLUDED_MODELS = ["StableDiffusion"]
 
-def fetch_cached_json(url: str, path: Path, cache_timeout: int) -> dict:
+def fetch_cached_json(url: str, path: Path, cache_timeout: int, headers=None, **kwargs) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file():
         mod_time = path.stat().st_mtime
@@ -38,23 +38,21 @@ def fetch_cached_json(url: str, path: Path, cache_timeout: int) -> dict:
                 return json.load(file)
 
     try:
-        response = httpx.get(url, follow_redirects=True)
+        response = httpx.get(url, headers=headers, follow_redirects=True, timeout=1.5, **kwargs)
         response.raise_for_status()
         data = response.json()
         with open(path, "w") as file:
             json.dump(data, file)
         return data
-    except httpx.HTTPError:
+    except Exception:
         if path.is_file():
             with open(path, "r") as file:
                 return json.load(file)
         else:
-            raise Exception(f"Failed to download data and no cache is available at {path}")
-
+            return {"data": []}
 def get_hyperbolic_models() -> List[Dict[str, Any]]:
     key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
     if not key:
-        print("Hyperbolic API key not found.")
         return []
 
     url = "https://api.hyperbolic.xyz/v1/models"
@@ -62,14 +60,14 @@ def get_hyperbolic_models() -> List[Dict[str, Any]]:
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json"
     }
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        models = response.json().get("data", [])
-        return models
-    except requests.RequestException as e:
-        print(f"Failed to fetch models: {e}")
-        return []
+    
+    data = fetch_cached_json(
+        url=url,
+        path=llm.user_dir() / "hyperbolic_models.json",
+        cache_timeout=3600,
+        headers=headers
+    )
+    return data.get("data", [])
 
 def get_model_ids_with_aliases() -> List[Tuple[str, List[str], ModelType]]:
     return [
