@@ -49,6 +49,8 @@ def fetch_cached_json(url: str, path: Path, cache_timeout: int, headers=None, **
             with open(path, "r") as file:
                 return json.load(file)
         else:
+            with open(path, "w") as file:
+                json.dump({"data": []}, file)
             return {"data": []}
 def get_hyperbolic_models() -> List[Dict[str, Any]]:
     key = llm.get_key("", "hyperbolic", "LLM_HYPERBOLIC_KEY")
